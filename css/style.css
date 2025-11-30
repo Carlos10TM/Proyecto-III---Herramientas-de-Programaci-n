@@ -181,7 +181,7 @@ body {
     border: 3px solid rgba(85, 139, 47, 0.8);
 }
 
-/* Efecto de cesped animado */
+/* Efecto de cesped*/
 #game-area::before {
     content: '';
     position: absolute;
@@ -329,22 +329,6 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.4);
     line-height: 1.2;
     z-index: 3;
-}
-
-/* Overlay de informacion */
-#game-overlay {
-    animation: fadeInDown 0.5s ease;
-}
-
-@keyframes fadeInDown {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 /* Responsive */

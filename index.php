@@ -168,13 +168,6 @@ $jugador = $result->fetch_assoc();
                                     <div id="base-grid">
                                         <!-- Las casillas se generan con JavaScript -->
                                     </div>
-                                    
-                                    <!-- Overlay para información adicional (futuro) -->
-                                    <div id="game-overlay" style="position: absolute; top: 10px; right: 10px; z-index: 100;">
-                                        <div class="badge bg-dark bg-opacity-75 p-2">
-                                            <i class="fas fa-map"></i> Mapa del Reino
-                                        </div>
-                                    </div>
                                 </div>
                             </div>
                         </div>
