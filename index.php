@@ -234,10 +234,14 @@ $jugador = $result->fetch_assoc();
         </div>
     </div>
 
+    <!-- Contenedor de notificaciones -->
+    <div id="notificaciones-container" style="position: fixed; bottom: 20px; left: 20px; z-index: 9999; width: 320px;"></div>
+
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <!-- JavaScript del juego -->
     <script src="js/game.js"></script>
+
 </body>
 </html>

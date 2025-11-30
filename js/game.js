@@ -2,20 +2,21 @@
 // INICIALIZACION
 // ========================================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎮 Social Kingdooms - Juego iniciado');
-    
+
     // Inicializar el grid de la base
     inicializarGrid();
     
-    // Cargar edificios en el grid (solo los terminados)
+    // Cargar edificios construidos en el grid
     cargarMisEdificiosParaGrid();
+
+    // Iniciar generacion automatica de recursos
+    iniciarGeneracionAutomatica();
 });
 
 // ========================================
 // FUNCION PARA CAMBIAR ENTRE SECCIONES
 // ========================================
 function mostrarSeccion(seccion) {
-    console.log('Intentando mostrar sección:', seccion);
     
     // Ocultar todas las secciones
     const secciones = document.querySelectorAll('.seccion-juego');
@@ -27,7 +28,6 @@ function mostrarSeccion(seccion) {
     const seccionMostrar = document.getElementById('seccion-' + seccion);
     if (seccionMostrar) {
         seccionMostrar.style.display = 'block';
-        console.log('Sección mostrada:', seccion);
         
         // Si es la sección de edificios, cargar los edificios
         if (seccion === 'edificios') {
@@ -47,7 +47,6 @@ function mostrarSeccion(seccion) {
 // FUNCION PARA CARGAR EDIFICIOS
 // ========================================
 function cargarEdificios() {
-    console.log('Cargando edificios desde el servidor...');
     
     // Cargar mis edificios construidos
     fetch('api/buildings/get_my_buildings.php')
@@ -65,7 +64,6 @@ function cargarEdificios() {
     fetch('api/buildings/get_available.php')
         .then(response => response.json())
         .then(edificios => {
-            console.log('Edificios disponibles:', edificios);
             mostrarEdificiosDisponibles(edificios);
         })
         .catch(error => {
@@ -198,7 +196,7 @@ function mostrarMisEdificios(edificios) {
 // FUNCION PARA MOSTRAR EDIFICIOS EN CONSTRUCCION
 // ===============================================
 function mostrarEdificiosEnConstruccion(edificios) {
-    console.log('Edificios en construcción recibidos:', edificios);
+
     const container = document.getElementById('mis-edificios');
     
     if (edificios.length === 0) {
@@ -294,6 +292,7 @@ function mostrarEdificiosDisponibles(edificios) {
     let html = '';
     
     edificios.forEach(edificio => {
+
         // Determinar el icono segun el tipo
         let icono = '';
         switch(edificio.tipo) {
@@ -362,7 +361,6 @@ function mostrarEdificiosDisponibles(edificios) {
 // FUNCION PARA CONSTRUIR EDIFICIO
 // ========================================
 function construirEdificio(edificioId) {
-    console.log('Intentando construir edificio ID:', edificioId);
     
     // Confirmar construccion
     if (!confirm('¿Estás seguro de que quieres construir este edificio?')) {
@@ -381,7 +379,6 @@ function construirEdificio(edificioId) {
     })
     .then(response => response.json())
     .then(data => {
-        console.log('Respuesta del servidor:', data);
         
         if (data.success) {
             // Mostrar mensaje de exito
@@ -411,8 +408,6 @@ function actualizarRecursos(recursos) {
     document.getElementById('madera').textContent = Number(recursos.madera).toLocaleString();
     document.getElementById('piedra').textContent = Number(recursos.piedra).toLocaleString();
     document.getElementById('comida').textContent = Number(recursos.comida).toLocaleString();
-    
-    console.log('Recursos actualizados:', recursos);
 }
 
 // ========================================
@@ -464,8 +459,6 @@ function finalizarConstruccion(edificioId) {
     
     construccionesFinalizadas.add(edificioId);
     
-    console.log('Construcción finalizada:', edificioId);
-    
     // Llamar al API para finalizar en la base de datos
     fetch('api/buildings/finish_construction.php', {
         method: 'POST',
@@ -475,7 +468,6 @@ function finalizarConstruccion(edificioId) {
     })
     .then(response => response.json())
     .then(data => {
-        console.log('Construcción finalizada en BD:', data);
         
         if (data.success && data.finalizados > 0) {
             alert('¡Construcción completada!');
@@ -501,11 +493,11 @@ function finalizarConstruccion(edificioId) {
 const edificioEmojis = {
     'ayuntamiento': '🏰',
     'aserradero': '🪵',
-    'cantera': '⛰️',
-    'granja': '🌾',
-    'mina_oro': '💎',
+    'cantera': '🪨',
+    'granja': '🐄',
+    'mina_oro': '⛏️',
     'cuartel': '⚔️',
-    'torre': '🗼'
+    'torre': '🏯'
 };
 
 // Inicializar el grid
@@ -513,26 +505,23 @@ function inicializarGrid() {
     const grid = document.getElementById('base-grid');
     grid.innerHTML = '';
     
-    // Crear 10x10 = 100 casillas
-    for (let i = 0; i < 121; i++) {
+    // Crear 9x9 = 81 casillas
+    for (let i = 0; i < 81; i++) {
         const cell = document.createElement('div');
         cell.className = 'grid-cell';
         cell.dataset.position = i;
         
-        // Marcar la casilla central (posición 60 en un grid de 11x11, fila 5 columna 5)
-        if (i === 60) {
+        // Marcar la casilla central (posicion 40 en un grid de 9x9, fila 4 columna 4)
+        if (i === 40) {
             cell.classList.add('center');
         }
         
         grid.appendChild(cell);
     }
-    
-    console.log('Grid inicializado: 11x11 casillas');
 }
 
 // Cargar edificios en el grid
 function cargarEdificiosEnGrid(edificios) {
-    console.log('Cargando edificios en el grid:', edificios);
     
     // Limpiar edificios actuales
     document.querySelectorAll('.grid-cell').forEach(cell => {
@@ -545,7 +534,7 @@ function cargarEdificiosEnGrid(edificios) {
         
         // Si es ayuntamiento y no tiene posicion, ponerlo en el centro
         if (edificio.tipo === 'ayuntamiento' && !posicion) {
-            posicion = 60; // Centro del grid 11x11
+            posicion = 40; // Centro del grid 9x9
             actualizarPosicionEdificio(edificio.id, posicion);
         }
         
@@ -577,25 +566,25 @@ function encontrarPosicionLibre() {
     const casillasOcupadas = Array.from(document.querySelectorAll('.grid-cell.occupied'))
         .map(cell => parseInt(cell.dataset.position));
     
-    const centro = 44;
-    
-    // Posiciones alrededor del centro en orden de prioridad
+    const centro = 40;
+
+    // Posiciones alrededor del centro (9x9, centro = 40)
     const posicionesPrioritarias = [
-        59, 61, 49, 71, // Lados directos (izquierda, derecha, arriba, abajo)
-        48, 50, 70, 72, // Diagonales
-        47, 51, 58, 62, 69, 73, // Segunda capa
-        36, 37, 38, 39, 40, 80, 81, 82, 83, 84 // Tercera capa
+        39, 41, 31, 49,         // Lados directos (izq, der, arriba, abajo)
+        30, 32, 48, 50,         // Diagonales
+        29, 33, 38, 42, 47, 51, // Segunda capa
+        21, 22, 23, 57, 58, 59  // Tercera capa
     ];
-    
+
     // Buscar en posiciones prioritarias
     for (let pos of posicionesPrioritarias) {
         if (!casillasOcupadas.includes(pos) && pos !== centro) {
             return pos;
         }
     }
-    
+
     // Si no hay espacio cerca, buscar cualquier posición libre
-    for (let i = 0; i < 121; i++) {
+    for (let i = 0; i < 81; i++) {
         if (!casillasOcupadas.includes(i) && i !== centro) {
             return i;
         }
@@ -642,4 +631,77 @@ function cargarMisEdificiosParaGrid() {
         .catch(error => {
             console.error('Error al cargar edificios para grid:', error);
         });
+}
+
+// =============================================
+// SISTEMA DE GENERACION AUTOMATICA DE RECURSOS
+// =============================================
+
+// Iniciar generacion automatica
+function iniciarGeneracionAutomatica() {
+    console.log('Sistema de generación automática iniciado');
+
+    // Generar recursos cada 1 minuto
+    setInterval(() => {
+        generarRecursos();
+    }, 60000); // 60000 milisegundos = 1 minuto
+}
+
+// Llamar al API para generar recursos
+function generarRecursos() {
+    fetch('api/resources/generate.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Recursos generados:', data.generados);
+            
+            // Actualizar recursos en pantalla
+            actualizarRecursos(data.recursos_actuales);
+            
+            // Mostrar notificacion de recursos generados
+            mostrarNotificacionRecursos(data.generados);
+        }
+    })
+    .catch(error => {
+        console.error('Error al generar recursos:', error);
+    });
+}
+
+// Mostrar notificacion de recursos generados
+function mostrarNotificacionRecursos(generados) {
+    let recursos = [];
+    
+    if (generados.madera > 0) recursos.push(`🪵 +${generados.madera} Madera`);
+    if (generados.piedra > 0) recursos.push(`🪨 +${generados.piedra} Piedra`);
+    if (generados.comida > 0) recursos.push(`🍖 +${generados.comida} Comida`);
+    if (generados.oro > 0) recursos.push(`🪙 +${generados.oro} Oro`);
+    
+    // Solo mostrar si se genero algo
+    if (recursos.length > 0) {
+        const container = document.getElementById('notificaciones-container');
+        
+        // Crear la notificacion
+        const notificacion = document.createElement('div');
+        notificacion.className = 'alert alert-success alert-dismissible fade show';
+        notificacion.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+        notificacion.innerHTML = `
+            <strong><i class="fas fa-coins"></i> Recursos generados!</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            <hr>
+            <small>${recursos.join('<br>')}</small>
+        `;
+        
+        // Agregar al contenedor
+        container.appendChild(notificacion);
+        
+        // Desaparecer despues de 30 segundos
+        setTimeout(() => {
+            notificacion.remove();
+        }, 30000);
+    }
 }
