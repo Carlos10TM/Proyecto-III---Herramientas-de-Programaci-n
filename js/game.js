@@ -38,14 +38,20 @@ function mostrarSeccion(seccion) {
         if (seccion === 'bienvenida') {
             cargarMisEdificiosParaGrid();
         }
+
+        // Si es la seccion de unidades, cargar las unidades
+        if (seccion === 'unidades') {
+            cargarUnidades();
+        }
+
     } else {
         console.error('No se encontró la sección:', 'seccion-' + seccion);
     }
 }
 
-// ========================================
+// ==============================
 // FUNCION PARA CARGAR EDIFICIOS
-// ========================================
+// ==============================
 function cargarEdificios() {
     
     // Cargar mis edificios construidos
@@ -78,9 +84,9 @@ function cargarEdificios() {
         });
 }
 
-// ========================================
+// ===================================
 // FUNCION PARA MOSTRAR MIS EDIFICIOS
-// ========================================
+// ===================================
 function mostrarMisEdificios(edificios) {
     const container = document.getElementById('mis-edificios');
     
@@ -150,19 +156,35 @@ function mostrarMisEdificios(edificios) {
                     <div class="card-body">
                         <p class="small text-muted">${edificio.descripcion}</p>
                         
-                        ${edificio.generacion_por_minuto > 0 ? `
+                        <!-- ESTADISTICAS DEL NIVEL ACTUAL -->
+                        ${edificio.generacion_actual > 0 ? `
                             <div class="alert alert-info py-2 mb-2">
-                                <i class="fas fa-clock"></i> Generando: <strong>${edificio.generacion_por_minuto}/min</strong>
+                                <i class="fas fa-clock"></i> Generando: <strong>${edificio.generacion_actual}/min</strong>
                             </div>
                         ` : ''}
                         
-                        ${edificio.bonus_tropas > 0 ? `
+                        ${edificio.bonus_tropas_actual > 0 ? `
                             <div class="alert alert-success py-2 mb-2">
-                                <i class="fas fa-users"></i> Tropas: <strong>+${edificio.bonus_tropas}</strong>
+                                <i class="fas fa-users"></i> Tropas: <strong>${edificio.bonus_tropas_actual}</strong>
                             </div>
                         ` : ''}
                         
+                        <!-- ESTADISTICAS DEL CUARTEL -->
+                        ${edificio.tipo === 'cuartel' && edificio.colas_entrenamiento > 0 ? `
+                            <div class="alert alert-primary py-2 mb-2">
+                                <i class="fas fa-list"></i> Colas: <strong>${edificio.colas_entrenamiento}</strong>
+                            </div>
+                        ` : ''}
+
+                        ${edificio.tipo === 'cuartel' && edificio.reduccion_tiempo_entrenamiento > 0 ? `
+                            <div class="alert alert-primary py-2 mb-2">
+                                <i class="fas fa-tachometer-alt"></i> Velocidad de entrenamiento: <strong>${edificio.reduccion_tiempo_entrenamiento}%</strong>
+                            </div>
+                        ` : ''}
+
+                        <!-- SI PUEDE MEJORAR -->
                         ${edificio.costo_mejora_madera ? `
+                            <hr>
                             <div class="mb-2">
                                 <strong>Costo de mejora:</strong>
                                 <div class="d-flex justify-content-around mt-2">
@@ -174,6 +196,36 @@ function mostrarMisEdificios(edificios) {
                                     <small><i class="fas fa-hourglass"></i> ${edificio.tiempo_mejora}s</small>
                                 </div>
                             </div>
+                            
+                            <!-- MEJORAS DE ESTADISTICAS -->
+                            ${edificio.generacion_siguiente > 0 ? `
+                                <div class="alert alert-warning py-2 mb-2">
+                                    <i class="fas fa-arrow-up"></i> Generará: <strong>${edificio.generacion_siguiente}/min</strong>
+                                    <small class="text-muted">(+${edificio.generacion_siguiente - edificio.generacion_actual})</small>
+                                </div>
+                            ` : ''}
+                            
+                            ${edificio.bonus_tropas_siguiente > 0 ? `
+                                <div class="alert alert-warning py-2 mb-2">
+                                    <i class="fas fa-arrow-up"></i> Tropas: <strong>${edificio.bonus_tropas_siguiente}</strong>
+                                    <small class="text-muted">(+${edificio.bonus_tropas_siguiente - edificio.bonus_tropas_actual})</small>
+                                </div>
+                            ` : ''}
+
+                            <!-- MEJORAS DEL CUARTEL -->
+                            ${edificio.tipo === 'cuartel' && edificio.colas_entrenamiento_siguiente > edificio.colas_entrenamiento ? `
+                                <div class="alert alert-warning py-2 mb-2">
+                                    <i class="fas fa-arrow-up"></i> Colas: <strong>${edificio.colas_entrenamiento_siguiente}</strong>
+                                    <small class="text-muted">(+${edificio.colas_entrenamiento_siguiente - edificio.colas_entrenamiento})</small>
+                                </div>
+                            ` : ''}
+
+                            ${edificio.tipo === 'cuartel' && edificio.reduccion_tiempo_entrenamiento_siguiente > edificio.reduccion_tiempo_entrenamiento ? `
+                                <div class="alert alert-warning py-2 mb-2">
+                                    <i class="fas fa-arrow-up"></i> Velocidad: <strong>+${edificio.reduccion_tiempo_entrenamiento_siguiente}%</strong>
+                                    <small class="text-muted">(+${edificio.reduccion_tiempo_entrenamiento_siguiente - edificio.reduccion_tiempo_entrenamiento}%)</small>
+                                </div>
+                            ` : ''}
                             
                             <button class="btn btn-warning btn-sm w-100" onclick="mejorarEdificio(${edificio.id})">
                                 <i class="fas fa-arrow-up"></i> Mejorar a Nivel ${edificio.nivel + 1}
@@ -270,9 +322,9 @@ function mostrarEdificiosEnConstruccion(edificios) {
     });
 }
 
-// ========================================
+// ===============================
 // FUNCION PARA MOSTRAR EDIFICIOS
-// ========================================
+// ===============================
 function mostrarEdificiosDisponibles(edificios) {
     const container = document.getElementById('edificios-disponibles');
     
@@ -357,47 +409,94 @@ function mostrarEdificiosDisponibles(edificios) {
     container.innerHTML = html;
 }
 
-// ========================================
+// ================================
 // FUNCION PARA CONSTRUIR EDIFICIO
-// ========================================
+// ================================
 function construirEdificio(edificioId) {
-    
-    // Confirmar construccion
-    if (!confirm('¿Estás seguro de que quieres construir este edificio?')) {
-        return;
-    }
-    
-    // Hacer peticion a la API
-    fetch('api/buildings/build.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            edificio_id: edificioId
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        
-        if (data.success) {
-            // Mostrar mensaje de exito
-            alert('¡Edificio en construcción! Tiempo: ' + data.tiempo_construccion + ' segundos');
-            
-            // Actualizar recursos en pantalla
-            actualizarRecursos(data.recursos);
-            
-            // Recargar edificios
-            cargarEdificios();
-        } else {
-            // Mostrar error
-            alert('Error: ' + data.error);
+    // Mostrar confirmacion de construccion
+    mostrarConfirmacion(
+        '¿Estás seguro de que quieres construir este edificio?',
+        () => {
+            // Si confirma, construir
+            fetch('api/buildings/build.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    edificio_id: edificioId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {        
+                if (data.success) {
+                    // Mostrar mensaje de exito
+                    mostrarNotificacion(
+                        `¡Edificio en construcción! Tiempo: ${data.tiempo_construccion}s`,
+                        'success'
+                    );
+                    
+                    // Actualizar recursos en pantalla
+                    actualizarRecursos(data.recursos);
+                    
+                    // Recargar edificios
+                    cargarEdificios();
+                } else {
+                    // Mostrar error
+                    mostrarNotificacion(data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarNotificacion('Error al construir el edificio', 'error');
+            });
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('Error al construir el edificio');
-    });
+    );
+}
+
+// ==============================
+// FUNCION PARA MEJORAR EDIFICIO
+// ==============================
+function mejorarEdificio(edificioId) {  
+    // Confirmar mejora
+    mostrarConfirmacion(
+        '¿Estás seguro de que quieres mejorar este edificio?',
+        () => {
+            // Si confirma, mejorar
+            fetch('api/buildings/upgrade.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    edificio_id: edificioId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Mostrar mensaje de éxito
+                    mostrarNotificacion(
+                        `¡Edificio mejorando! Tiempo: ${data.tiempo_construccion}s`,
+                        'success'
+                    );
+                    
+                    // Actualizar recursos en pantalla
+                    actualizarRecursos(data.recursos);
+                    
+                    // Recargar edificios
+                    cargarEdificios();
+                } else {
+                    // Mostrar error
+                    mostrarNotificacion(data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarNotificacion('Error al mejorar el edificio', 'error');
+            });
+        }
+    );
 }
 
 // =============================================
@@ -410,9 +509,9 @@ function actualizarRecursos(recursos) {
     document.getElementById('comida').textContent = Number(recursos.comida).toLocaleString();
 }
 
-// ========================================
+// ================================
 // FUNCIONES DE CONTADOR REGRESIVO
-// ========================================
+// ================================
 function formatearTiempo(segundos) {  // Formatear segundos a mm:ss
     if (segundos <= 0) return '00:00';
     const minutos = Math.floor(segundos / 60);
@@ -454,7 +553,7 @@ let construccionesFinalizadas = new Set(); // Para evitar duplicados
 function finalizarConstruccion(edificioId) {
     // Verificar si ya se finalizo este edificio
     if (construccionesFinalizadas.has(edificioId)) {
-        return; // Ya se proceso (no hace nada)
+        return;
     }
     
     construccionesFinalizadas.add(edificioId);
@@ -470,7 +569,7 @@ function finalizarConstruccion(edificioId) {
     .then(data => {
         
         if (data.success && data.finalizados > 0) {
-            alert('¡Construcción completada!');
+            mostrarNotificacion('¡Construcción completada!', 'success');
             // Recargar todos los edificios
             cargarEdificios();
         }
@@ -485,9 +584,9 @@ function finalizarConstruccion(edificioId) {
     }, 5000);
 }
 
-// ========================================
+// ==============================
 // SISTEMA DE GRID PARA LA BASE
-// ========================================
+// ==============================
 
 // Mapeo de tipos de edificios a emojis (TEMPORAL)
 const edificioEmojis = {
@@ -522,12 +621,16 @@ function inicializarGrid() {
 
 // Cargar edificios en el grid
 function cargarEdificiosEnGrid(edificios) {
+    console.log('Cargando edificios en el grid:', edificios);
     
     // Limpiar edificios actuales
     document.querySelectorAll('.grid-cell').forEach(cell => {
         cell.classList.remove('occupied');
         cell.innerHTML = '';
     });
+    
+    // Guardar las posiciones ya ocupadas en esta carga
+    const posicionesOcupadas = new Set();
     
     edificios.forEach(edificio => {
         let posicion = edificio.posicion_x || null;
@@ -538,11 +641,14 @@ function cargarEdificiosEnGrid(edificios) {
             actualizarPosicionEdificio(edificio.id, posicion);
         }
         
-        // Si no tiene posicion, asignar una automaticamente
-        if (!posicion) {
-            posicion = encontrarPosicionLibre();
+        // Si no tiene posicion o la posicion ya esta ocupada, asignar una nueva
+        if (!posicion || posicionesOcupadas.has(posicion)) {
+            posicion = encontrarPosicionLibre(posicionesOcupadas);
             actualizarPosicionEdificio(edificio.id, posicion);
         }
+        
+        // Marcar la posicion como ocupada
+        posicionesOcupadas.add(posicion);
         
         // Colocar el edificio en el grid
         const cell = document.querySelector(`[data-position="${posicion}"]`);
@@ -562,12 +668,16 @@ function cargarEdificiosEnGrid(edificios) {
 }
 
 // Encontrar una posicion libre en el grid, priorizando cercania al centro
-function encontrarPosicionLibre() {
+function encontrarPosicionLibre(posicionesYaOcupadas = new Set()) {
+    // Obtener casillas ocupadas
     const casillasOcupadas = Array.from(document.querySelectorAll('.grid-cell.occupied'))
         .map(cell => parseInt(cell.dataset.position));
     
+    // Combinar con las posiciones ya asignadas en esta carga
+    const todasOcupadas = new Set([...casillasOcupadas, ...posicionesYaOcupadas]);
+    
     const centro = 40;
-
+    
     // Posiciones alrededor del centro (9x9, centro = 40)
     const posicionesPrioritarias = [
         39, 41, 31, 49,         // Lados directos (izq, der, arriba, abajo)
@@ -575,22 +685,22 @@ function encontrarPosicionLibre() {
         29, 33, 38, 42, 47, 51, // Segunda capa
         21, 22, 23, 57, 58, 59  // Tercera capa
     ];
-
+    
     // Buscar en posiciones prioritarias
     for (let pos of posicionesPrioritarias) {
-        if (!casillasOcupadas.includes(pos) && pos !== centro) {
+        if (!todasOcupadas.has(pos) && pos !== centro) {
             return pos;
         }
     }
-
-    // Si no hay espacio cerca, buscar cualquier posición libre
+    
+    // Si no hay espacio cerca, buscar cualquier posicion libre
     for (let i = 0; i < 81; i++) {
-        if (!casillasOcupadas.includes(i) && i !== centro) {
+        if (!todasOcupadas.has(i) && i !== centro) {
             return i;
         }
     }
     
-    return 0; // Fallback
+    return 0;
 }
 
 // Actualizar posicion del edificio en la BD
@@ -617,7 +727,46 @@ function actualizarPosicionEdificio(edificioId, posicion) {
 // Mostrar info del edificio al hacer click
 function mostrarInfoEdificio(edificio) {
     const emoji = edificioEmojis[edificio.tipo] || '🏗️';
-    alert(`${emoji} ${edificio.nombre}\nNivel: ${edificio.nivel}\n${edificio.descripcion}`);
+    
+    // Construir el mensaje con stats
+    let mensaje = `
+        <strong>${emoji} ${edificio.nombre}</strong><br>
+        <span class="badge bg-primary">Nivel ${edificio.nivel}</span><br>
+        <small class="text-muted">${edificio.descripcion}</small>
+    `;
+    
+    // Agregar estadisticas de generacion
+    if (edificio.generacion_actual > 0) {
+        mensaje += `<br><small><i class="fas fa-clock text-info"></i> Generando: <strong>${edificio.generacion_actual}/min</strong></small>`;
+    }
+    
+    // Agregar estadisticas de bonus de tropas
+    if (edificio.bonus_tropas_actual > 0) {
+        mensaje += `<br><small><i class="fas fa-users text-success"></i> Tropas: <strong>+${edificio.bonus_tropas_actual}</strong></small>`;
+    }
+    
+    // Agregar estadisticas del cuartel
+    if (edificio.tipo === 'cuartel') {
+        if (edificio.colas_entrenamiento > 0) {
+            mensaje += `<br><small><i class="fas fa-list text-primary"></i> Colas de entrenamiento: <strong>${edificio.colas_entrenamiento}</strong></small>`;
+        }
+        if (edificio.reduccion_tiempo_entrenamiento > 0) {
+            mensaje += `<br><small><i class="fas fa-tachometer-alt text-primary"></i> Velocidad de entrenamiento: <strong>+${edificio.reduccion_tiempo_entrenamiento}%</strong></small>`;
+        }
+        
+        // Mostrar que unidades puede entrenar segun el nivel
+        const unidadesDesbloqueadas = [];
+        if (edificio.nivel >= 1) unidadesDesbloqueadas.push('Soldado');
+        if (edificio.nivel >= 2) unidadesDesbloqueadas.push('Arquero');
+        if (edificio.nivel >= 3) unidadesDesbloqueadas.push('Caballero');
+        if (edificio.nivel >= 4) unidadesDesbloqueadas.push('Mago');
+        
+        if (unidadesDesbloqueadas.length > 0) {
+            mensaje += `<br><small><i class="fas fa-unlock text-warning"></i> Unidades disponibles: <strong>${unidadesDesbloqueadas.join(', ')}</strong></small>`;
+        }
+    }
+    
+    mostrarNotificacion(mensaje, 'info', 6000);
 }
 
 // Cargar mis edificios terminados para el grid
@@ -704,4 +853,476 @@ function mostrarNotificacionRecursos(generados) {
             notificacion.remove();
         }, 30000);
     }
+}
+
+// ================================
+// SISTEMA DE NOTIFICACIONES TOAST
+// ================================
+
+// Mostrar notificacion toast
+function mostrarNotificacion(mensaje, tipo = 'info', duracion = 4000) {
+    const container = document.getElementById('notificaciones-container');
+    
+    // Determinar el estilo segun el tipo
+    let claseAlerta = 'alert-info';
+    let icono = 'fa-info-circle';
+    
+    switch(tipo) {
+        case 'success':
+            claseAlerta = 'alert-success';
+            icono = 'fa-check-circle';
+            break;
+        case 'error':
+            claseAlerta = 'alert-danger';
+            icono = 'fa-exclamation-circle';
+            break;
+        case 'warning':
+            claseAlerta = 'alert-warning';
+            icono = 'fa-exclamation-triangle';
+            break;
+        case 'info':
+            claseAlerta = 'alert-info';
+            icono = 'fa-info-circle';
+            break;
+    }
+    
+    // Crear la notificacion
+    const notificacion = document.createElement('div');
+    notificacion.className = `alert ${claseAlerta} alert-dismissible fade show mb-2`;
+    notificacion.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+    notificacion.innerHTML = `
+        <i class="fas ${icono}"></i> ${mensaje}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    // Agregar al contenedor
+    container.appendChild(notificacion);
+    
+    // desaparecer despues de la duracion
+    setTimeout(() => {
+        notificacion.classList.remove('show');
+        setTimeout(() => notificacion.remove(), 150);
+    }, duracion);
+}
+
+// Mostrar confirmacion con botones
+function mostrarConfirmacion(mensaje, onConfirm, onCancel = null) {
+    const container = document.getElementById('notificaciones-container');
+    
+    // Crear la notificacion con botones
+    const notificacion = document.createElement('div');
+    notificacion.className = 'alert alert-warning alert-dismissible fade show mb-2';
+    notificacion.style.boxShadow = '0 4px 15px rgba(0,0,0,0.3)';
+    notificacion.innerHTML = `
+        <i class="fas fa-question-circle"></i> ${mensaje}
+        <div class="mt-2">
+            <button class="btn btn-success btn-sm me-2" id="btn-confirmar">
+                <i class="fas fa-check"></i> Confirmar
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-cancelar">
+                <i class="fas fa-times"></i> Cancelar
+            </button>
+        </div>
+    `;
+    
+    // Agregar al contenedor
+    container.appendChild(notificacion);
+    
+    // Eventos de los botones
+    notificacion.querySelector('#btn-confirmar').onclick = () => {
+        notificacion.remove();
+        if (onConfirm) onConfirm();
+    };
+    
+    notificacion.querySelector('#btn-cancelar').onclick = () => {
+        notificacion.remove();
+        if (onCancel) onCancel();
+    };
+}
+
+// ===================
+// SISTEMA DE TROPAS
+// ===================
+
+// Cargar unidades disponibles
+function cargarUnidades() {
+    console.log('Cargando unidades desde el servidor...');
+    
+    fetch('api/units/get_available.php')
+        .then(response => response.json())
+        .then(data => {
+            mostrarUnidades(data);
+            mostrarUnidadesEnEntrenamiento();
+            actualizarContadorTropas();
+        })
+        .catch(error => {
+            console.error('Error al cargar unidades:', error);
+        });
+}
+
+// Mostrar unidades en la interfaz
+function mostrarUnidades(data) {
+    const container = document.getElementById('seccion-unidades');
+    
+    // Si no tiene cuartel
+    if (!data.tiene_cuartel) {
+        container.innerHTML = `
+            <h4><i class="fas fa-users"></i> Entrenamiento de Unidades</h4>
+            <hr>
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle"></i> 
+                <strong>Necesitas construir un Cuartel</strong> para entrenar unidades.
+                <br><small>El Cuartel se desbloquea al mejorar tu Ayuntamiento a Nivel 2.</small>
+            </div>
+        `;
+        return;
+    }
+    
+    // Si no hay unidades disponibles
+    if (data.unidades.length === 0) {
+        container.innerHTML = `
+            <h4><i class="fas fa-users"></i> Entrenamiento de Unidades</h4>
+            <hr>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> No hay unidades disponibles.
+            </div>
+        `;
+        return;
+    }
+    
+    // Crear el HTML
+    let html = `
+        <h4><i class="fas fa-users"></i> Entrenamiento de Unidades</h4>
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <div class="alert alert-info mb-0">
+                    <i class="fas fa-landmark"></i> <strong>Cuartel Nivel ${data.nivel_cuartel}</strong>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="alert alert-success mb-0">
+                    <i class="fas fa-users"></i> <strong>Límite de tropas: <span id="tropas-actuales">?</span> / <span id="tropas-limite">?</span></strong>
+                </div>
+            </div>
+        </div>
+        <hr>
+        <div class="row">
+    `;
+
+    // Mapeo de tipos a iconos, emojis y colores
+    const unidadConfig = {
+        'soldado': { icono: 'fa-shield', emoji: '⚔️', color: 'secondary' },
+        'arquero': { icono: 'fa-crosshairs', emoji: '🏹', color: 'success' },
+        'caballero': { icono: 'fa-horse-head', emoji: '🐴', color: 'primary' },
+        'mago': { icono: 'fa-hat-wizard', emoji: '🧙‍♂', color: 'danger' }
+    };
+    
+    data.unidades.forEach(unidad => {
+        const config = unidadConfig[unidad.tipo] || { icono: 'fa-user', color: 'secondary' };
+        
+        html += `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card h-100">
+                    <div class="card-header bg-${config.color} text-white text-center">
+                        <div style="font-size: 3rem; margin: 10px 0;">${config.emoji}</div>
+                        <h5 class="mb-0">${unidad.nombre}</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted">${unidad.descripcion}</p>
+                        
+                        <!-- Estadísticas -->
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <div class="bg-danger bg-opacity-10 p-2 rounded">
+                                    <div style="font-size: 1.5rem;">⚔️</div>
+                                    <small class="text-muted d-block">Ataque</small>
+                                    <strong class="text-danger fs-5">${unidad.ataque}</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="bg-primary bg-opacity-10 p-2 rounded">
+                                    <div style="font-size: 1.5rem;">🛡️</div>
+                                    <small class="text-muted d-block">Defensa</small>
+                                    <strong class="text-primary fs-5">${unidad.defensa}</strong>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="bg-success bg-opacity-10 p-2 rounded">
+                                    <div style="font-size: 1.5rem;">❤️</div>
+                                    <small class="text-muted d-block">Vida</small>
+                                    <strong class="text-success fs-5">${unidad.vida}</strong>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Costos -->
+                        <div class="mb-2">
+                            <strong class="d-block mb-2">Costo por unidad:</strong>
+                            <div class="row">
+                                <div class="col-6">
+                                    <div class="alert alert-warning py-2 mb-0 text-center">
+                                        <span style="font-size: 1.2rem;">🪙</span>
+                                        <strong class="d-block">${unidad.costo_oro}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="alert alert-danger py-2 mb-0 text-center">
+                                        <span style="font-size: 1.2rem;">🍖</span>
+                                        <strong class="d-block">${unidad.costo_comida}</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-2 text-center">
+                            <small><i class="fas fa-hourglass"></i> Tiempo: <strong>${unidad.tiempo_entrenamiento}s</strong></small>
+                        </div>
+                        
+                        <!-- Cantidad actual -->
+                        <div class="alert alert-secondary text-center py-2 mb-2">
+                            <small>Tienes: <strong>${unidad.cantidad_actual}</strong></small>
+                        </div>
+                        
+                        <!-- Input de cantidad -->
+                        <div class="input-group mb-2">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="cambiarCantidad(${unidad.id}, -1)">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <input type="number" 
+                                   id="cantidad-${unidad.id}" 
+                                   class="form-control form-control-sm text-center" 
+                                   value="1" 
+                                   min="1" 
+                                   max="100">
+                            <button class="btn btn-outline-secondary btn-sm" onclick="cambiarCantidad(${unidad.id}, 1)">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Boton entrenar -->
+                        <button class="btn btn-success btn-sm w-100" onclick="entrenarUnidad(${unidad.id})">
+                            <i class="fas fa-plus-circle"></i> Entrenar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    html += `</div>`;
+    
+    container.innerHTML = html;
+}
+
+// Cambiar cantidad a entrenar
+function cambiarCantidad(unidadId, cambio) {
+    const input = document.getElementById(`cantidad-${unidadId}`);
+    let valor = parseInt(input.value) || 1;
+    valor += cambio;
+    
+    if (valor < 1) valor = 1;
+    if (valor > 100) valor = 100;
+    
+    input.value = valor;
+}
+
+// Entrenar unidad
+function entrenarUnidad(unidadId) {
+    const cantidadInput = document.getElementById(`cantidad-${unidadId}`);
+    const cantidad = parseInt(cantidadInput.value) || 1;
+    
+    // Confirmar entrenamiento
+    mostrarConfirmacion(
+        `¿Entrenar ${cantidad} unidad(es)?`,
+        () => {
+            // Si confirma, entrenar
+            fetch('api/units/train.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    unidad_id: unidadId,
+                    cantidad: cantidad
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Respuesta del servidor:', data);
+                
+                if (data.success) {
+                    // Mostrar mensaje de exito
+                    mostrarNotificacion(
+                        `¡Entrenamiento iniciado! Tiempo: ${data.tiempo_entrenamiento}s`,
+                        'success'
+                    );
+                    
+                    // Actualizar recursos en pantalla
+                    actualizarRecursos(data.recursos);
+                    
+                    // Recargar unidades
+                    cargarUnidades();
+                } else {
+                    // Mostrar error
+                    mostrarNotificacion(data.error, 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                mostrarNotificacion('Error al entrenar unidad', 'error');
+            });
+        }
+    );
+}
+
+// Mostrar cola de entrenamiento
+function mostrarUnidadesEnEntrenamiento() {
+    fetch('api/units/get_queue.php')
+        .then(response => response.json())
+        .then(cola => {
+            if (cola.length === 0) return;
+            
+            // Mapeo de emojis
+            const unidadEmojis = {
+                'soldado': '⚔️',
+                'arquero': '🏹',
+                'caballero': '🐴',
+                'mago': '🧙‍♂'
+            };
+            
+            // Agregar seccion de cola si no existe
+            let container = document.getElementById('cola-entrenamiento');
+            if (!container) {
+                const seccion = document.getElementById('seccion-unidades');
+                const nuevoDiv = document.createElement('div');
+                nuevoDiv.id = 'cola-entrenamiento';
+                seccion.insertBefore(nuevoDiv, seccion.firstChild);
+                container = nuevoDiv;
+            }
+            
+            let html = '<h5 class="mb-3"><i class="fas fa-hourglass-half"></i> Cola de Entrenamiento:</h5><div class="row">';
+            
+            // Mostrar cada unidad en la cola
+            cola.forEach((unidad, index) => {
+                const segundos = Math.max(0, unidad.segundos_restantes);
+                const emoji = unidadEmojis[unidad.tipo] || '🛡️';
+                const enProceso = index === 0; // Solo la primera esta entrenandose
+                
+                html += `
+                    <div class="col-md-6 col-lg-3 mb-3">
+                        <div class="card ${enProceso ? 'border-warning' : 'border-secondary'}">
+                            <div class="card-header ${enProceso ? 'bg-warning' : 'bg-secondary'} text-white text-center">
+                                <div style="font-size: 2rem;">${emoji}</div>
+                                <small class="d-block">${unidad.nombre}</small>
+                                ${enProceso ? '<span class="badge bg-dark mt-1"><i class="fas fa-spinner fa-spin"></i> Entrenando</span>' : '<span class="badge bg-dark mt-1"><i class="fas fa-clock"></i> En cola</span>'}
+                            </div>
+                            <div class="card-body p-2">
+                                ${enProceso ? `
+                                    <div class="text-center mb-2">
+                                        <small class="text-muted">Tiempo restante:</small>
+                                        <h6 id="timer-queue-${unidad.id}" class="mb-0 text-primary">
+                                            ${formatearTiempo(segundos)}
+                                        </h6>
+                                    </div>
+                                    <div class="progress" style="height: 15px;">
+                                        <div id="progress-queue-${unidad.id}" 
+                                             class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                             role="progressbar" 
+                                             style="width: 5%">
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <div class="text-center">
+                                        <small class="text-muted">Posición: ${index + 1}</small>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div><hr>';
+            container.innerHTML = html;
+            
+            // Iniciar contador solo para la primera unidad (la que esta entrenandose)
+            if (cola.length > 0) {
+                const primeraUnidad = cola[0];
+                const tiempoTotal = 30; // Obtener del catalogo o base de datos segun el tipo de unidad
+                iniciarContadorCola(primeraUnidad.id, Math.max(0, primeraUnidad.segundos_restantes), tiempoTotal);
+            }
+        })
+        .catch(error => {
+            console.error('Error al cargar cola de entrenamiento:', error);
+        });
+}
+
+// Contador para cola de entrenamiento (solo primera unidad)
+const intervaloCola = {};
+
+function iniciarContadorCola(colaId, segundosRestantes, tiempoTotal) {
+    // Limpiar intervalo anterior si existe
+    if (intervaloCola.actual) {
+        clearInterval(intervaloCola.actual);
+    }
+    
+    let tiempoRestante = segundosRestantes;
+    
+    const intervalo = setInterval(() => {
+        tiempoRestante--;
+        
+        const timerElement = document.getElementById(`timer-queue-${colaId}`);
+        const progressElement = document.getElementById(`progress-queue-${colaId}`);
+        
+        if (timerElement) {
+            timerElement.textContent = formatearTiempo(tiempoRestante);
+        }
+        
+        // Actualizar barra de progreso
+        if (progressElement && tiempoTotal > 0) {
+            const porcentaje = Math.max(0, Math.min(100, ((tiempoTotal - tiempoRestante) / tiempoTotal) * 100));
+            progressElement.style.width = porcentaje + '%';
+            progressElement.textContent = Math.round(porcentaje) + '%';
+        }
+        
+        if (tiempoRestante <= 0) {
+            clearInterval(intervalo);
+            finalizarUnidadCola();
+        }
+    }, 1000);
+    
+    intervaloCola.actual = intervalo;
+}
+
+// Finalizar unidad de la cola
+function finalizarUnidadCola() {    
+    fetch('api/units/finish_queue.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {     
+        if (data.success && data.finalizadas > 0) {
+            mostrarNotificacion('¡Unidad lista para combatir!', 'success');
+            cargarUnidades(); // Recargar todo
+        }
+    })
+    .catch(error => {
+        console.error('Error al finalizar unidad:', error);
+    });
+}
+
+// Actualizar contador de tropas
+function actualizarContadorTropas() {
+    fetch('api/units/get_troop_count.php')
+        .then(response => response.json())
+        .then(data => {
+            const actualElement = document.getElementById('tropas-actuales');
+            const limiteElement = document.getElementById('tropas-limite');
+                
+            if (actualElement) actualElement.textContent = data.tropas_actuales;
+            if (limiteElement) limiteElement.textContent = data.limite_tropas;
+        });
 }

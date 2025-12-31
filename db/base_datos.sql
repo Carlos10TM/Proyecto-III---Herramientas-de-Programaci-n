@@ -130,7 +130,7 @@ INSERT INTO edificios_catalogo (nombre, tipo, descripcion, nivel_ayuntamiento_re
 ('Cantera', 'cantera', 'Produce piedra constantemente.', 1, 3, 5),
 ('Granja', 'granja', 'Produce comida para tus tropas.', 1, 3, 5),
 ('Mina de Oro', 'mina_oro', 'Produce el valioso oro necesario para entrenar tropas.', 5, 1, 3),
-('Cuartel', 'cuartel', 'Permite entrenar unidades militares.', 2, 1, 5),
+('Cuartel', 'cuartel', 'Permite entrenar unidades para defender tu reino.', 2, 1, 5),
 ('Torre de Defensa', 'torre', 'Defiende tu base de ataques enemigos.', 3, 4, 5);
 
 -- Costos y stats del AYUNTAMIENTO
@@ -171,6 +171,22 @@ INSERT INTO edificios_niveles (edificio_catalogo_id, nivel, costo_madera, costo_
 (5, 2, 10000, 10000, 4000, 600, 10),
 (5, 3, 20000, 20000, 8000, 1200, 18);
 
+-- Costos y stats del CUARTEL
+INSERT INTO edificios_niveles (edificio_catalogo_id, nivel, costo_madera, costo_piedra, costo_comida, tiempo_construccion, generacion_por_minuto, bonus_tropas) VALUES
+(6, 1, 500, 500, 0, 60, 0, 0),
+(6, 2, 1000, 1000, 0, 120, 0, 0),
+(6, 3, 2000, 2000, 0, 240, 0, 0),
+(6, 4, 4000, 4000, 0, 480, 0, 0),
+(6, 5, 8000, 8000, 0, 960, 0, 0);
+
+-- Costos y stats de la TORRE DE DEFENSA
+INSERT INTO edificios_niveles (edificio_catalogo_id, nivel, costo_madera, costo_piedra, costo_comida, tiempo_construccion, generacion_por_minuto, bonus_tropas) VALUES
+(7, 1, 400, 600, 0, 45, 0, 0),
+(7, 2, 800, 1200, 0, 90, 0, 0),
+(7, 3, 1600, 2400, 0, 180, 0, 0),
+(7, 4, 3200, 4800, 0, 360, 0, 0),
+(7, 5, 6400, 9600, 0, 720, 0, 0);
+
 -- Insertar unidades basicas
 INSERT INTO unidades_catalogo (nombre, tipo, ataque, defensa, vida, costo_oro, costo_comida, tiempo_entrenamiento, descripcion) VALUES
 ('Soldado', 'soldado', 10, 8, 50, 50, 20, 30, 'Unidad básica de infantería'),
@@ -183,4 +199,4 @@ INSERT INTO enemigos_catalogo (nombre, tipo, nivel, vida, ataque, defensa, recom
 ('Goblin Explorador', 'goblin', 1, 30, 5, 3, 10, 'Débil pero rápido'),
 ('Orco Guerrero', 'orco', 2, 80, 12, 8, 25, 'Fuerte y resistente'),
 ('Troll de Piedra', 'troll', 3, 150, 20, 15, 50, 'Muy difícil de derrotar'),
-('Dragón Joven', 'dragon', 5, 300, 40, 25, 150, 'Boss final de oleada');
+('Dragón', 'dragon', 5, 300, 40, 25, 150, 'Boss final de oleada');

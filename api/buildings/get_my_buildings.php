@@ -12,14 +12,26 @@ $jugador_id = $_SESSION['jugador_id'];
 
 // Obtener edificios terminados
 $query = "SELECT ej.*, ec.nombre, ec.tipo, ec.descripcion,
-          en.generacion_por_minuto, en.bonus_tropas,
-          en.costo_madera as costo_mejora_madera,
-          en.costo_piedra as costo_mejora_piedra,
-          en.costo_comida as costo_mejora_comida,
-          en.tiempo_construccion as tiempo_mejora
+          -- Estadisticas del nivel actual
+          en_actual.generacion_por_minuto as generacion_actual,
+          en_actual.bonus_tropas as bonus_tropas_actual,
+          en_actual.colas_entrenamiento as colas_entrenamiento,
+          en_actual.reduccion_tiempo_entrenamiento as reduccion_tiempo_entrenamiento,
+          -- Estadisticas y costos del nivel siguiente (para mejoras)
+          en_siguiente.generacion_por_minuto as generacion_siguiente,
+          en_siguiente.bonus_tropas as bonus_tropas_siguiente,
+          en_siguiente.colas_entrenamiento as colas_entrenamiento_siguiente,
+          en_siguiente.reduccion_tiempo_entrenamiento as reduccion_tiempo_entrenamiento_siguiente,
+          en_siguiente.costo_madera as costo_mejora_madera,
+          en_siguiente.costo_piedra as costo_mejora_piedra,
+          en_siguiente.costo_comida as costo_mejora_comida,
+          en_siguiente.tiempo_construccion as tiempo_mejora
           FROM edificios_jugador ej
           JOIN edificios_catalogo ec ON ej.edificio_catalogo_id = ec.id
-          LEFT JOIN edificios_niveles en ON (ec.id = en.edificio_catalogo_id AND en.nivel = ej.nivel + 1)
+          -- Join para nivel actual
+          LEFT JOIN edificios_niveles en_actual ON (ec.id = en_actual.edificio_catalogo_id AND en_actual.nivel = ej.nivel)
+          -- Join para nivel siguiente
+          LEFT JOIN edificios_niveles en_siguiente ON (ec.id = en_siguiente.edificio_catalogo_id AND en_siguiente.nivel = ej.nivel + 1)
           WHERE ej.jugador_id = ? AND ej.en_construccion = 0 AND ej.en_mejora = 0
           ORDER BY ec.tipo, ej.nivel DESC";
 
