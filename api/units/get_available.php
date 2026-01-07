@@ -55,7 +55,6 @@ while ($row = $result->fetch_assoc()) {
         'nombre' => $row['nombre'],
         'tipo' => $row['tipo'],
         'ataque' => $row['ataque'],
-        'defensa' => $row['defensa'],
         'vida' => $row['vida'],
         'costo_oro' => $row['costo_oro'],
         'costo_comida' => $row['costo_comida'],

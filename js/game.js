@@ -1032,21 +1032,14 @@ function mostrarUnidades(data) {
                         
                         <!-- Estadísticas -->
                         <div class="row text-center mb-3">
-                            <div class="col-4">
+                            <div class="col-6">
                                 <div class="bg-danger bg-opacity-10 p-2 rounded">
                                     <div style="font-size: 1.5rem;">⚔️</div>
                                     <small class="text-muted d-block">Ataque</small>
                                     <strong class="text-danger fs-5">${unidad.ataque}</strong>
                                 </div>
                             </div>
-                            <div class="col-4">
-                                <div class="bg-primary bg-opacity-10 p-2 rounded">
-                                    <div style="font-size: 1.5rem;">🛡️</div>
-                                    <small class="text-muted d-block">Defensa</small>
-                                    <strong class="text-primary fs-5">${unidad.defensa}</strong>
-                                </div>
-                            </div>
-                            <div class="col-4">
+                            <div class="col-6">
                                 <div class="bg-success bg-opacity-10 p-2 rounded">
                                     <div style="font-size: 1.5rem;">❤️</div>
                                     <small class="text-muted d-block">Vida</small>
