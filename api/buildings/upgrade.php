@@ -2,7 +2,7 @@
 session_start();
 require_once '../../config/connection.php';
 
-// Verificar sesion
+// Verificar que el usuario este logueado
 if (!isset($_SESSION['jugador_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'No autorizado']);

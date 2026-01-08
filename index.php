@@ -122,9 +122,6 @@ $jugador = $result->fetch_assoc();
                             <button class="btn btn-outline-danger" onclick="mostrarSeccion('combate')">
                                 <i class="fas fa-skull-crossbones"></i> Combate
                             </button>
-                            <button class="btn btn-outline-info" onclick="mostrarSeccion('estadisticas')">
-                                <i class="fas fa-chart-bar"></i> Estadísticas
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -214,15 +211,6 @@ $jugador = $result->fetch_assoc();
                         <!-- Seccion de Combate -->
                         <div id="seccion-combate" class="seccion-juego" style="display: none;">
                             <h4><i class="fas fa-skull-crossbones"></i> Combate contra Enemigos</h4>
-                            <hr>
-                            <div class="alert alert-warning">
-                                <i class="fas fa-hammer"></i> Sistema en desarrollo...
-                            </div>
-                        </div>
-
-                        <!-- Seccion de Estadisticas -->
-                        <div id="seccion-estadisticas" class="seccion-juego" style="display: none;">
-                            <h4><i class="fas fa-chart-bar"></i> Estadísticas del Reino</h4>
                             <hr>
                             <div class="alert alert-warning">
                                 <i class="fas fa-hammer"></i> Sistema en desarrollo...

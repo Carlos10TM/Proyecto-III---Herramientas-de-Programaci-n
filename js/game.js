@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Iniciar procesamiento de combate
     iniciarProcesamientoCombate();
+
+    // Iniciar visualizacion de tropas
+    iniciarVisualizacionTropas();
 });
 
 // ======================================
@@ -56,8 +59,321 @@ function mostrarSeccion(seccion) {
             cargarUnidades();
         }
 
+        // Si es la seccion de combate, cargar las estadisticas
+        if (seccion === 'combate') {
+            cargarEstadisticasCombate();
+        }
+
     } else {
         console.error('No se encontró la sección:', 'seccion-' + seccion);
+    }
+}
+
+// ========================================================
+// FUNCIONES PARA CARGAR Y MOSTRAR ESTADISTICAS DE COMBATE
+// ========================================================
+
+// Variable para el intervalo de actualización
+let intervaloActualizacionCombate = null;
+
+function cargarEstadisticasCombate() {
+    const container = document.getElementById('seccion-combate');
+    
+    // Mostrar loading
+    container.innerHTML = `
+        <h4><i class="fas fa-skull-crossbones"></i> Estadísticas de Combate</h4>
+        <hr>
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Cargando...</span>
+            </div>
+        </div>
+    `;
+    
+    // Limpiar intervalo anterior si existe
+    if (intervaloActualizacionCombate) {
+        clearInterval(intervaloActualizacionCombate);
+    }
+    
+    // Cargar inmediatamente
+    actualizarEstadisticasCombate();
+    
+    // Actualizar cada 3 segundos
+    intervaloActualizacionCombate = setInterval(() => {
+        actualizarEstadisticasCombate();
+    }, 3000);
+}
+
+function actualizarEstadisticasCombate() {
+    // Solo actualizar si se esta en la seccion de combate
+    const seccionCombate = document.getElementById('seccion-combate');
+    if (!seccionCombate || seccionCombate.style.display === 'none') {
+        if (intervaloActualizacionCombate) {
+            clearInterval(intervaloActualizacionCombate);
+            intervaloActualizacionCombate = null;
+        }
+        return;
+    }
+    
+    fetch('api/wave/get_stats.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                mostrarEstadisticasCombate(data);
+            }
+        })
+        .catch(error => {
+            console.error('Error al actualizar estadísticas:', error);
+        });
+}
+
+// Variable global para el temporizador
+let temporizadorOleada = null;
+
+function mostrarEstadisticasCombate(data) {
+    const container = document.getElementById('seccion-combate');
+    
+    // Limpiar temporizador anterior
+    if (temporizadorOleada) {
+        clearInterval(temporizadorOleada);
+        temporizadorOleada = null;
+    }
+    
+    const emojisPorTipo = {
+        'goblin': '👺',
+        'orco': '👹',
+        'troll': '🧌',
+        'esqueleto': '🩻',
+        'dragon': '🐉'
+    };
+    
+    let html = `
+        <h4><i class="fas fa-skull-crossbones"></i> Estadísticas de Combate</h4>
+        <hr>
+        
+        <!-- Estado Actual -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card ${data.oleada_en_curso ? 'border-danger' : 'border-success'} h-100">
+                    <div class="card-header ${data.oleada_en_curso ? 'bg-danger' : 'bg-success'} text-white">
+                        <h5 class="mb-0">
+                            ${data.oleada_en_curso ? '⚔️ COMBATE EN CURSO' : '🛡️ SIN AMENAZAS'}
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <h3 class="text-center mb-3">Oleada Actual: <span class="badge bg-primary">${data.oleada_actual}</span></h3>
+                        ${!data.oleada_en_curso ? `
+                            <div class="alert alert-info text-center">
+                                <i class="fas fa-clock"></i> Próxima oleada en:<br>
+                                <h4 class="mb-0 mt-2" id="temporizador-proxima-oleada" data-segundos="${data.segundos_hasta_proxima}">${formatearTiempo(data.segundos_hasta_proxima)}</h4>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card border-warning h-100">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="fas fa-trophy"></i> Logros</h5>
+                    </div>
+                    <div class="card-body d-flex flex-column justify-content-center">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div style="font-size: 2.5rem;">🏆</div>
+                                <h4>${data.oleadas_completadas}</h4>
+                                <small class="text-muted">Oleadas<br>Superadas</small>
+                            </div>
+                            <div class="col-6">
+                                <div style="font-size: 2.5rem;">💀</div>
+                                <h4>${data.total_enemigos_derrotados}</h4>
+                                <small class="text-muted">Enemigos<br>Derrotados</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Si hay combate en curso mostrar estadisticas actuales
+    if (data.combate_actual) {
+        const combate = data.combate_actual;
+        const progreso = combate.enemigos_total > 0 
+            ? (combate.enemigos_eliminados / combate.enemigos_total * 100) 
+            : 0;
+        
+        html += `
+            <div class="card border-danger mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="fas fa-fire"></i> Batalla Actual - Oleada ${data.oleada_actual}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-md-4">
+                            <div class="bg-danger bg-opacity-10 p-3 rounded">
+                                <div style="font-size: 2rem;">👹</div>
+                                <h3 class="text-danger mb-0">${combate.enemigos_vivos}</h3>
+                                <small class="text-muted">Enemigos Vivos</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="bg-success bg-opacity-10 p-3 rounded">
+                                <div style="font-size: 2rem;">💀</div>
+                                <h3 class="text-success mb-0">${combate.enemigos_eliminados}</h3>
+                                <small class="text-muted">Enemigos Eliminados</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="bg-warning bg-opacity-10 p-3 rounded">
+                                <div style="font-size: 2rem;">💥</div>
+                                <h3 class="text-warning mb-0">${combate.edificios_perdidos}</h3>
+                                <small class="text-muted">Edificios Perdidos</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <strong>Progreso de la Batalla:</strong>
+                            <strong>${Math.round(progreso)}%</strong>
+                        </div>
+                        <div class="progress" style="height: 25px;">
+                            <div class="progress-bar bg-success progress-bar-striped progress-bar-animated" 
+                                 style="width: ${progreso}%">
+                                ${combate.enemigos_eliminados} / ${combate.enemigos_total}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Composición de enemigos en esta oleada -->
+                    <h6 class="mt-3 mb-2"><strong>Enemigos en esta oleada:</strong></h6>
+                    <div class="row">
+        `;
+        
+        combate.composicion_enemigos.forEach(enemigo => {
+            const emoji = emojisPorTipo[enemigo.tipo] || '👾';
+            html += `
+                <div class="col-md-6 mb-2">
+                    <div class="alert alert-dark mb-0 py-2">
+                        <span style="font-size: 1.5rem;">${emoji}</span>
+                        <strong class="ms-2">${enemigo.nombre}</strong>
+                        <span class="badge bg-secondary float-end">x${enemigo.cantidad}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Previsualizacion de proxima oleada
+    if (!data.oleada_en_curso && data.proxima_oleada_enemigos.length > 0) {
+        html += `
+            <div class="card border-info mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">👁️‍🗨️ Próxima Oleada ${data.oleada_actual}</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i> <strong>Prepárate!</strong> Estos enemigos atacarán tu reino pronto.
+                    </div>
+                    <div class="row">
+        `;
+        
+        let totalEnemigos = 0;
+        data.proxima_oleada_enemigos.forEach(enemigo => {
+            totalEnemigos += enemigo.cantidad;
+            const emoji = emojisPorTipo[enemigo.tipo] || '👾';
+            html += `
+                <div class="col-md-6 mb-2">
+                    <div class="alert alert-secondary mb-0 py-2">
+                        <span style="font-size: 1.5rem;">${emoji}</span>
+                        <strong class="ms-2">${enemigo.nombre}</strong>
+                        <span class="badge bg-danger float-end">x${enemigo.cantidad}</span>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += `
+                    </div>
+                    <div class="text-center mt-2">
+                        <span class="badge bg-danger" style="font-size: 1rem;">Total: ${totalEnemigos} enemigos</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Historial de enemigos derrotados
+    html += `
+        <div class="card">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0"><i class="fas fa-skull"></i> Total de Enemigos Derrotados</h5>
+            </div>
+            <div class="card-body">
+    `;
+    
+    if (data.enemigos_derrotados.length === 0) {
+        html += `
+            <div class="alert alert-secondary text-center">
+                <i class="fas fa-info-circle"></i> Aún no has derrotado ningún enemigo
+            </div>
+        `;
+    } else {
+        html += '<div class="row">';
+        
+        data.enemigos_derrotados.forEach(enemigo => {
+            const emoji = emojisPorTipo[enemigo.tipo] || '👾';
+            html += `
+                <div class="col-md-4 col-lg-3 mb-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <div style="font-size: 2.5rem;">${emoji}</div>
+                            <h6 class="mt-2 mb-1">${enemigo.nombre}</h6>
+                            <h4 class="text-primary mb-0">${enemigo.cantidad}</h4>
+                            <small class="text-muted">eliminados</small>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+    }
+    
+    html += `
+            </div>
+        </div>
+    `;
+    
+    container.innerHTML = html;
+    
+    // Iniciar temporizador local que se actualiza cada segundo
+    if (!data.oleada_en_curso) {
+        const temporizadorElement = document.getElementById('temporizador-proxima-oleada');
+        if (temporizadorElement) {
+            let segundosRestantes = parseInt(temporizadorElement.dataset.segundos) || 0;
+            
+            temporizadorOleada = setInterval(() => {
+                segundosRestantes--;
+                if (segundosRestantes < 0) segundosRestantes = 0;
+                
+                if (temporizadorElement) {
+                    temporizadorElement.textContent = formatearTiempo(segundosRestantes);
+                }
+                
+                if (segundosRestantes <= 0) {
+                    clearInterval(temporizadorOleada);
+                    temporizadorOleada = null;
+                }
+            }, 1000);
+        }
     }
 }
 
@@ -197,11 +513,11 @@ function mostrarMisEdificios(edificios) {
                         ${edificio.costo_mejora_madera ? `
                             <hr>
                             <div class="mb-2">
-                                <strong>Costo de mejora:</strong>
+                                <strong>Costos de mejora:</strong>
                                 <div class="d-flex justify-content-around mt-2">
-                                    ${edificio.costo_mejora_madera > 0 ? `<span><i class="fas fa-tree text-success"></i> ${edificio.costo_mejora_madera}</span>` : ''}
-                                    ${edificio.costo_mejora_piedra > 0 ? `<span><i class="fas fa-mountain text-secondary"></i> ${edificio.costo_mejora_piedra}</span>` : ''}
-                                    ${edificio.costo_mejora_comida > 0 ? `<span><i class="fas fa-bread-slice text-danger"></i> ${edificio.costo_mejora_comida}</span>` : ''}
+                                    ${edificio.costo_mejora_madera > 0 ? `<span> 🪵 ${edificio.costo_mejora_madera}</span>` : ''}
+                                    ${edificio.costo_mejora_piedra > 0 ? `<span> 🪨 ${edificio.costo_mejora_piedra}</span>` : ''}
+                                    ${edificio.costo_mejora_comida > 0 ? `<span> 🍖 ${edificio.costo_mejora_comida}</span>` : ''}
                                 </div>
                                 <div class="text-center mt-2">
                                     <small><i class="fas fa-hourglass"></i> ${edificio.tiempo_mejora}s</small>
@@ -359,11 +675,11 @@ function mostrarEdificiosDisponibles(edificios) {
                         <p class="small text-muted">${edificio.descripcion}</p>
                         
                         <div class="mb-2">
-                            <strong>Costos:</strong>
+                            <strong>Costos de construcción:</strong>
                             <div class="d-flex justify-content-around mt-2">
-                                ${edificio.costos.madera > 0 ? `<span><i class="fas fa-tree text-success"></i> ${edificio.costos.madera}</span>` : ''}
-                                ${edificio.costos.piedra > 0 ? `<span><i class="fas fa-mountain text-secondary"></i> ${edificio.costos.piedra}</span>` : ''}
-                                ${edificio.costos.comida > 0 ? `<span><i class="fas fa-bread-slice text-danger"></i> ${edificio.costos.comida}</span>` : ''}
+                                ${edificio.costos.madera > 0 ? `<span> 🪵 ${edificio.costos.madera}</span>` : ''}
+                                ${edificio.costos.piedra > 0 ? `<span> 🪨 ${edificio.costos.piedra}</span>` : ''}
+                                ${edificio.costos.comida > 0 ? `<span> 🍖 ${edificio.costos.comida}</span>` : ''}
                             </div>
                         </div>
                         
@@ -598,6 +914,14 @@ const enemigoEmojis = {
     'dragon': '🐉'
 };
 
+// Mapeo de tipos de tropas a emojis
+const tropaEmojis = {
+    'elfo': '🧝🏻‍♂️',
+    'arquero': '🏹',
+    'phoenix': '🐦‍🔥',
+    'mago': '🧙‍♂'
+};
+
 // Inicializar el grid
 function inicializarGrid() {
     const grid = document.getElementById('base-grid');
@@ -655,13 +979,31 @@ function cargarEdificiosEnGrid(edificios) {
             cell.classList.add('occupied');
             
             const emoji = edificioEmojis[edificio.tipo] || '🏗️';
-            cell.innerHTML = `
-                <span class="building-emoji">${emoji}</span>
-                <span class="building-level">Nv.${edificio.nivel}</span>
-            `;
             
-            // Agregar click para mostrar info
-            cell.onclick = () => mostrarInfoEdificio(edificio);
+            // Determinar clases segun si esta destruido
+            let claseEdificio = 'building-emoji';
+            if (edificio.esta_destruido == 1) {
+                claseEdificio += ' edificio-destruido';
+            }
+            
+            // Construir el HTML
+            let html = `<span class="${claseEdificio}">${emoji}</span>`;
+            cell.title = `${edificio.nombre}`;
+            cell.innerHTML = html;
+            
+            // Configurar eventos segun si esta destruido
+            if (edificio.esta_destruido == 0) {
+                // Edificio intacto: mostrar info normal
+                cell.onclick = () => mostrarInfoEdificio(edificio);
+                cell.style.cursor = 'pointer';
+            } else {
+                // Edificio destruido: mostrar mensaje
+                cell.title = `${edificio.nombre} (Destruido)`;
+                cell.style.cursor = 'pointer';
+                cell.onclick = () => {
+                    repararEdificio();
+                };
+            }
         }
     });
 }
@@ -726,31 +1068,56 @@ function actualizarPosicionEdificio(edificioId, posicion) {
 // Mostrar info del edificio al hacer click
 function mostrarInfoEdificio(edificio) {
     const emoji = edificioEmojis[edificio.tipo] || '🏗️';
+
+    // Calcular porcentaje de vida si tiene datos de vida
+    let vidaHTML = '';
+    if (edificio.vida_actual !== undefined && edificio.vida_maxima !== undefined) {
+        const porcentajeVida = (edificio.vida_actual / edificio.vida_maxima) * 100;
+        let colorVida = 'success';
+        if (porcentajeVida < 30) colorVida = 'danger';
+        else if (porcentajeVida < 70) colorVida = 'warning';
+        
+        vidaHTML = `
+            <div class="mb-2">
+                <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small><strong>🛡️ Estructura:</strong></small>
+                    <small><strong>${edificio.vida_actual} / ${edificio.vida_maxima}</strong></small>
+                </div>
+                <div class="progress" style="height: 12px;">
+                    <div class="progress-bar bg-${colorVida}" 
+                         style="width: ${porcentajeVida}%">
+                        ${Math.round(porcentajeVida)}%
+                    </div>
+                </div>
+            </div>
+        `;
+    }
     
     // Construir el mensaje con stats
     let mensaje = `
         <strong>${emoji} ${edificio.nombre}</strong><br>
         <span class="badge bg-primary">Nivel ${edificio.nivel}</span><br>
-        <small class="text-muted">${edificio.descripcion}</small>
+        <small class="text-muted">${edificio.descripcion}</small><br><br>
+        ${vidaHTML}
     `;
     
     // Agregar estadisticas de generacion
     if (edificio.generacion_actual > 0) {
-        mensaje += `<br><small><i class="fas fa-clock text-info"></i> Generando: <strong>${edificio.generacion_actual}/min</strong></small>`;
+        mensaje += `<small><i class="fas fa-clock text-info"></i> Generando: <strong>${edificio.generacion_actual}/min</strong></small><br>`;
     }
     
     // Agregar estadisticas de bonus de tropas
     if (edificio.bonus_tropas_actual > 0) {
-        mensaje += `<br><small><i class="fas fa-users text-success"></i> Tropas: <strong>+${edificio.bonus_tropas_actual}</strong></small>`;
+        mensaje += `<small><i class="fas fa-users text-success"></i> Tropas: <strong>+${edificio.bonus_tropas_actual}</strong></small><br>`;
     }
     
     // Agregar estadisticas del cuartel
     if (edificio.tipo === 'cuartel') {
         if (edificio.colas_entrenamiento > 0) {
-            mensaje += `<br><small><i class="fas fa-list text-primary"></i> Colas de entrenamiento: <strong>${edificio.colas_entrenamiento}</strong></small>`;
+            mensaje += `<small><i class="fas fa-list text-primary"></i> Colas de entrenamiento: <strong>${edificio.colas_entrenamiento}</strong></small><br>`;
         }
         if (edificio.reduccion_tiempo_entrenamiento > 0) {
-            mensaje += `<br><small><i class="fas fa-tachometer-alt text-primary"></i> Velocidad de entrenamiento: <strong>+${edificio.reduccion_tiempo_entrenamiento}%</strong></small>`;
+            mensaje += `<small><i class="fas fa-tachometer-alt text-primary"></i> Velocidad de entrenamiento: <strong>+${edificio.reduccion_tiempo_entrenamiento}%</strong></small><br>`;
         }
         
         // Mostrar que unidades puede entrenar segun el nivel
@@ -761,11 +1128,40 @@ function mostrarInfoEdificio(edificio) {
         if (edificio.nivel >= 4) unidadesDesbloqueadas.push('Mago');
         
         if (unidadesDesbloqueadas.length > 0) {
-            mensaje += `<br><small><i class="fas fa-unlock text-warning"></i> Unidades disponibles: <strong>${unidadesDesbloqueadas.join(', ')}</strong></small>`;
+            mensaje += `<small><i class="fas fa-unlock text-warning"></i> Unidades disponibles: <strong>${unidadesDesbloqueadas.join(', ')}</strong></small>`;
         }
+        
+        // Agregar boton para ir a entrenar tropas
+        mensaje += `<br><br><button class="btn btn-primary btn-sm w-100 mt-2" onclick="mostrarSeccion('unidades')">
+            <i class="fas fa-plus-circle"></i> Entrenar Tropas
+        </button>`;
     }
     
-    mostrarNotificacion(mensaje, 'info', 6000);
+    mostrarNotificacion(mensaje, 'info', 8000);
+}
+
+// Funcion para reparar edificio destruido
+function repararEdificio(edificioId) {
+    mostrarConfirmacion(
+        '¿Quieres reparar este edificio por la mitad del costo de construcción?',
+        () => {
+            fetch('api/buildings/repair.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ edificio_id: edificioId })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    mostrarNotificacion('¡Edificio reparado! 🔨', 'success');
+                    actualizarRecursos(data.recursos);
+                    cargarMisEdificiosParaGrid();
+                } else {
+                    mostrarNotificacion(data.error, 'error');
+                }
+            });
+        }
+    );
 }
 
 // Cargar mis edificios terminados para el grid
@@ -947,16 +1343,69 @@ function mostrarConfirmacion(mensaje, onConfirm, onCancel = null) {
 function cargarUnidades() {
     console.log('Cargando unidades desde el servidor...');
     
-    fetch('api/units/get_available.php')
+    // Primero verificar el estado del cuartel
+    fetch('api/units/check_barracks.php')
         .then(response => response.json())
-        .then(data => {
-            mostrarUnidades(data);
-            mostrarUnidadesEnEntrenamiento();
-            actualizarContadorTropas();
+        .then(barracksData => {
+            if (!barracksData.tiene_cuartel) {
+                mostrarMensajeSinCuartel();
+                return;
+            }
+            
+            if (barracksData.esta_destruido) {
+                mostrarMensajeCuartelDestruido();
+                return;
+            }
+            
+            // Si el cuartel no esta destruido, cargar unidades normalmente
+            fetch('api/units/get_available.php')
+                .then(response => response.json())
+                .then(data => {
+                    mostrarUnidades(data);
+                    mostrarUnidadesEnEntrenamiento();
+                    actualizarContadorTropas();
+                })
+                .catch(error => {
+                    console.error('Error al cargar unidades:', error);
+                });
         })
         .catch(error => {
-            console.error('Error al cargar unidades:', error);
+            console.error('Error al verificar cuartel:', error);
         });
+}
+
+function mostrarMensajeSinCuartel() {
+    const container = document.getElementById('seccion-unidades');
+    container.innerHTML = `
+        <h4><i class="fas fa-users"></i> Entrenamiento de Unidades</h4>
+        <hr>
+        <div class="alert alert-warning">
+            <i class="fas fa-exclamation-triangle"></i> 
+            <strong>Necesitas construir un Cuartel</strong> para entrenar unidades.
+            <br><small>El Cuartel se desbloquea desde el nivel 1 del Ayuntamiento.</small>
+        </div>
+        <button class="btn btn-primary" onclick="mostrarSeccion('edificios')">
+            <i class="fas fa-hammer"></i> Ir a Edificios
+        </button>
+    `;
+}
+
+function mostrarMensajeCuartelDestruido() {
+    const container = document.getElementById('seccion-unidades');
+    container.innerHTML = `
+        <h4><i class="fas fa-users"></i> Entrenamiento de Unidades</h4>
+        <hr>
+        <div class="alert alert-danger">
+            <div style="font-size: 3rem; text-align: center;">💥</div>
+            <h5 class="text-center mt-2"><strong>¡Tu Cuartel ha sido destruido!</strong></h5>
+            <p class="text-center mb-0">No puedes entrenar tropas hasta que lo repares.</p>
+        </div>
+        <div class="text-center">
+            <button class="btn btn-warning" onclick="mostrarSeccion('bienvenida')">
+                <i class="fas fa-hammer"></i> Reparar Cuartel
+            </button>
+        </div>
+    `;
 }
 
 // Mostrar unidades en la interfaz
@@ -1423,7 +1872,6 @@ function generarOleada() {
 function mostrarAlertaPreOleada(numeroOleada, segundosRestantes) {
     const container = document.getElementById('notificaciones-container');
     
-    // Crear una notificacion especial mas grande y llamativa
     const alerta = document.createElement('div');
     alerta.className = 'alert alert-danger alert-dismissible fade show mb-2';
     alerta.style.cssText = 'box-shadow: 0 8px 25px rgba(220, 53, 69, 0.5); border: 3px solid #dc3545; font-size: 1.1rem;';
@@ -1450,13 +1898,12 @@ function mostrarAlertaPreOleada(numeroOleada, segundosRestantes) {
             elemento.textContent = formatearTiempo(segundos);
         }
         
-        if (segundos <= 0) {
+        // Desaparecer despues de 15 segundos o cuando llegue a 0
+        if (segundos <= 0 || segundos <= (segundosRestantes - 15)) {
             clearInterval(intervalo);
             alerta.remove();
         }
     }, 1000);
-
-    // Tambien emitir un sonido de alerta (se puede agregar un archivo de sonido mas adelante)
 }
 
 // Mostrar notificacion cuando comienza la oleada
@@ -1471,8 +1918,8 @@ function mostrarNotificacionOleada(data) {
             <div style="font-size: 3.5rem; margin-right: 15px;">⚔️</div>
             <div class="flex-grow-1">
                 <h4 class="mb-1"><strong>¡OLEADA ${data.numero_oleada} INICIADA!</strong></h4>
-                <p class="mb-1">${data.enemigos_generados} enemigos están atacando tu reino</p>
-                <small>¡Defiende tu base a toda costa!</small>
+                <p class="mb-1">${data.enemigos_generados} enemigos te están atacando</p>
+                <small>¡Defiende tu reino a toda costa!</small>
             </div>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
         </div>
@@ -1488,7 +1935,7 @@ function mostrarNotificacionOleada(data) {
 }
 
 // =====================================
-// SISTEMA DE VISUALIZACIÓN DE ENEMIGOS
+// SISTEMA DE VISUALIZACION DE ENEMIGOS
 // =====================================
 
 // Variable global para almacenar enemigos actuales
@@ -1735,9 +2182,9 @@ function moverEnemigos() {
     });
 }
 
-// ============================================
+// =====================================
 // SISTEMA DE PROCESAMIENTO DE COMBATE
-// ============================================
+// =====================================
 
 // Iniciar el sistema de procesamiento de combate
 function iniciarProcesamientoCombate() {
@@ -1795,12 +2242,12 @@ function procesarAccionesCombate(acciones) {
         switch(accion.tipo) {
             case 'edificio_destruido':
                 mostrarNotificacion(
-                    `💥 ¡Tu ${accion.edificio} ha sido destruido! 💥`,
+                    `¡Tu ${accion.edificio} ha sido destruido/a! 💥`,
                     'error',
                     4000
                 );
                 // Recargar edificios para actualizar el grid
-                cargarMisEdificiosParaGrid();
+                actualizarEdificiosEnGrid();
                 break;
                 
             case 'enemigo_muerto':
@@ -1868,4 +2315,402 @@ function mostrarVictoriaOleada(acciones) {
             actualizarRecursos(data.recursos_actuales);
         }
     });
+}
+
+// ================================================
+// SISTEMA DE VISUALIZACION Y PATRULLAJE DE TROPAS
+// ================================================
+
+// Variable global para almacenar tropas y sus posiciones
+let tropasActivas = [];
+let posicionesTropas = new Map(); // Mapa de tropa_id -> posicion actual
+
+// Iniciar el sistema de visualizacion de tropas
+function iniciarVisualizacionTropas() {
+    console.log('Sistema de visualización de tropas iniciado');
+    
+    // Cargar tropas inmediatamente
+    actualizarTropas();
+    
+    // Actualizar visualizacion cada 2 segundos
+    setInterval(() => {
+        actualizarTropas();
+    }, 2000);
+    
+    // Mover tropas (patrullaje) cada 3 segundos
+    setInterval(() => {
+        patrullarTropas();
+    }, 3000);
+}
+
+// Funcion que obtiene las tropas del jugador
+function actualizarTropas() {
+    fetch('api/units/get_my_units.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                tropasActivas = data.tropas;
+                
+                // Inicializar posiciones de tropas nuevas
+                tropasActivas.forEach(tropa => {
+                    if (!posicionesTropas.has(tropa.id)) {
+                        // Asignar posición inicial aleatoria dentro del grid
+                        posicionesTropas.set(tropa.id, posicionInicialAleatoria());
+                    }
+                });
+                
+                // Dibujar tropas
+                dibujarTropasEnGrid();
+            }
+        })
+        .catch(error => {
+            console.error('Error al actualizar tropas:', error);
+        });
+}
+
+// Generar posicion inicial aleatoria para una tropa
+function posicionInicialAleatoria() {
+    // Elegir una posicion aleatoria dentro del grid (0-80) evitando el centro (40) porque esta el ayuntamiento
+    let posicion;
+    do {
+        posicion = Math.floor(Math.random() * 81);
+    } while (posicion === 40);
+    
+    return posicion;
+}
+
+// Funcion que dibuja las tropas en el grid
+function dibujarTropasEnGrid() {
+    // Limpiar tropas dibujadas previamente
+    limpiarTropasDelGrid();
+    
+    // Dibujar cada tropa
+    tropasActivas.forEach(tropa => {
+        // Por cada unidad de este tipo de tropa, crear una visualizacion
+        for (let i = 0; i < tropa.cantidad; i++) {
+            // Crear un ID unico para cada tropa
+            const tropaIndividualId = `${tropa.id}_${i}`;
+            
+            // Si esta tropa individual no tiene posicion asignarle una
+            if (!posicionesTropas.has(tropaIndividualId)) {
+                posicionesTropas.set(tropaIndividualId, posicionInicialAleatoria());
+            }
+            
+            const posicion = posicionesTropas.get(tropaIndividualId);
+            
+            if (posicion !== undefined && posicion >= 0 && posicion <= 80) {
+                const cell = document.querySelector(`[data-position="${posicion}"]`);
+                
+                if (cell) {
+                    const emoji = tropaEmojis[tropa.tipo] || '🛡️';
+                    
+                    // Crear el contenedor de la tropa
+                    const tropaDiv = document.createElement('div');
+                    tropaDiv.className = 'tropa-container';
+                    tropaDiv.dataset.tropaIndividualId = tropaIndividualId;
+                    
+                    // Crear el contenedor del emoji
+                    const tropaEmojiContainer = document.createElement('div');
+                    tropaEmojiContainer.className = 'tropa-emoji-container';
+                    
+                    // Crear el emoji de la tropa
+                    const tropaEmoji = document.createElement('div');
+                    tropaEmoji.className = 'tropa-emoji';
+                    tropaEmoji.textContent = emoji;
+                    
+                    // Agregar event listener para mostrar info de la tropa al hacer click
+                    tropaEmoji.addEventListener('click', function(event) {
+                        event.stopPropagation();
+                        mostrarInfoTropaIndividual(tropa, emoji);
+                    });
+                    
+                    tropaEmojiContainer.appendChild(tropaEmoji);
+                    
+                    // Crear la barra de vida
+                    const vidaContainer = document.createElement('div');
+                    vidaContainer.className = 'tropa-vida-container';
+                    
+                    const vidaBarra = document.createElement('div');
+                    vidaBarra.className = 'tropa-vida-barra';
+                    const porcentajeVida = (tropa.vida_actual / tropa.vida_maxima) * 100;
+                    vidaBarra.style.width = porcentajeVida + '%';
+                    
+                    vidaContainer.appendChild(vidaBarra);
+                    
+                    tropaDiv.appendChild(tropaEmojiContainer);
+                    tropaDiv.appendChild(vidaContainer);
+                    cell.appendChild(tropaDiv);
+                }
+            }
+        }
+    });
+}
+
+// Funcion para mostrar info de tropa individual
+function mostrarInfoTropaIndividual(tropa, emoji) {
+    const container = document.getElementById('notificaciones-container');
+    
+    const notificacion = document.createElement('div');
+    notificacion.className = 'alert alert-success alert-dismissible fade show mb-2';
+    notificacion.style.cssText = `
+        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.6); 
+        border: 3px solid #28a745; 
+        font-size: 1rem;
+        max-width: 400px;
+    `;
+    
+    // Determinar color de la barra de vida
+    const porcentajeVida = (tropa.vida_actual / tropa.vida_maxima) * 100;
+    let colorVida = 'success';
+    if (porcentajeVida < 30) colorVida = 'danger';
+    else if (porcentajeVida < 70) colorVida = 'warning';
+    
+    notificacion.innerHTML = `
+        <div class="d-flex align-items-start">
+            <div class="me-3 text-center">
+                <div style="font-size: 3.5rem; line-height: 1;">${emoji}</div>
+            </div>
+            <div class="flex-grow-1">
+                <button type="button" class="btn-close" data-bs-dismiss="alert" style="position: absolute; top: 10px; right: 10px;"></button>
+                
+                <h5 class="mb-2">
+                    <strong>${tropa.nombre}</strong>
+                    <span class="badge bg-success ms-2">Aliado</span>
+                </h5>
+                
+                <p class="small text-muted mb-2">${tropa.descripcion || 'Defensor del reino'}</p>
+                
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small><strong>❤️ Vida:</strong></small>
+                        <small><strong>${tropa.vida_actual}</strong></small>
+                    </div>
+                    <div class="progress" style="height: 15px;">
+                        <div class="progress-bar bg-${colorVida}" 
+                             style="width: ${porcentajeVida}%">
+                            ${Math.round(porcentajeVida)}%
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row text-center mt-3">
+                    <div class="col-12">
+                        <div class="bg-danger bg-opacity-10 p-2 rounded">
+                            <div style="font-size: 1.5rem;">⚔️</div>
+                            <small class="text-muted d-block">Ataque</small>
+                            <strong class="text-danger">${tropa.ataque}</strong>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mb-0 mt-2 py-2">
+                    <small><i class="fas fa-shield-alt"></i> Patrullando y defendiendo tu base</small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(notificacion);
+    
+    setTimeout(() => {
+        notificacion.classList.remove('show');
+        setTimeout(() => notificacion.remove(), 300);
+    }, 8000);
+}
+
+// Funcion que limpia todas las tropas del grid
+function limpiarTropasDelGrid() {
+    const tropasEnGrid = document.querySelectorAll('.tropa-container');
+    tropasEnGrid.forEach(tropa => tropa.remove());
+}
+
+// Funcion de patrullaje: mueve las tropas aleatoriamente por el grid
+function patrullarTropas() {
+    // Solo patrullar si no hay oleada en curso
+    if (estadoOleada.oleadaEnCurso) {
+        return;
+    }
+    
+    // Iterar sobre todas las posiciones de tropas individuales
+    posicionesTropas.forEach((posicionActual, tropaIndividualId) => {
+        // Calcular nueva posicion de patrullaje
+        const nuevaPosicion = calcularMovimientoPatrullaje(posicionActual);
+        posicionesTropas.set(tropaIndividualId, nuevaPosicion);
+    });
+    
+    // Redibujar tropas en nuevas posiciones
+    dibujarTropasEnGrid();
+}
+
+// Calcular movimiento de patrullaje aleatorio
+function calcularMovimientoPatrullaje(posicionActual) {
+    const fila = Math.floor(posicionActual / 9);
+    const columna = posicionActual % 9;
+    
+    // Movimientos posibles: arriba, abajo, izquierda, derecha
+    const movimientos = [];
+    
+    if (fila > 0) movimientos.push((fila - 1) * 9 + columna); // Arriba
+    if (fila < 8) movimientos.push((fila + 1) * 9 + columna); // Abajo
+    if (columna > 0) movimientos.push(fila * 9 + (columna - 1)); // Izquierda
+    if (columna < 8) movimientos.push(fila * 9 + (columna + 1)); // Derecha
+    
+    // Elegir un movimiento aleatorio
+    if (movimientos.length > 0) {
+        return movimientos[Math.floor(Math.random() * movimientos.length)];
+    }
+    
+    return posicionActual; // Si no hay movimientos validos quedarse en el mismo lugar
+}
+
+// Mostrar informacion de las tropas al hacer click
+function mostrarInfoTropa(tropas, emoji) {
+    const container = document.getElementById('notificaciones-container');
+    
+    // Crear notificacion especial para tropas
+    const notificacion = document.createElement('div');
+    notificacion.className = 'alert alert-success alert-dismissible fade show mb-2';
+    notificacion.style.cssText = `
+        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.6); 
+        border: 3px solid #28a745; 
+        font-size: 1rem;
+        max-width: 400px;
+    `;
+    
+    // Construir HTML con informacion de todas las tropas en esta posicion
+    let tropasHTML = '';
+    let cantidadTotal = 0;
+    
+    tropas.forEach(tropa => {
+        cantidadTotal += tropa.cantidad;
+        tropasHTML += `
+            <div class="mb-2 pb-2 border-bottom">
+                <h6 class="mb-1"><strong>${tropa.nombre}</strong> x${tropa.cantidad}</h6>
+                <div class="row text-center mt-2">
+                    <div class="col-6">
+                        <div class="bg-danger bg-opacity-10 p-2 rounded">
+                            <div style="font-size: 1.2rem;">⚔️</div>
+                            <small class="text-muted d-block">Ataque</small>
+                            <strong class="text-danger">${tropa.ataque}</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-success bg-opacity-10 p-2 rounded">
+                            <div style="font-size: 1.2rem;">❤️</div>
+                            <small class="text-muted d-block">Vida</small>
+                            <strong class="text-success">${tropa.vida}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    notificacion.innerHTML = `
+        <div class="d-flex align-items-start">
+            <div class="me-3 text-center">
+                <div style="font-size: 4rem; line-height: 1;">
+                    ${emoji}
+                </div>
+                ${cantidadTotal > 1 ? `<div class="badge bg-success mt-1">${cantidadTotal} Tropas</div>` : ''}
+            </div>
+            <div class="flex-grow-1">
+                <button type="button" class="btn-close" data-bs-dismiss="alert" style="position: absolute; top: 10px; right: 10px;"></button>
+                
+                <h5 class="mb-3">
+                    <strong>🛡️ Tropas Defensoras</strong>
+                    <span class="badge bg-success ms-2">Aliadas</span>
+                </h5>
+                
+                ${tropasHTML}
+                
+                <div class="alert alert-info mb-0 mt-2 py-2">
+                    <small><i class="fas fa-shield-alt"></i> Estas tropas patrullan tu base y atacan automáticamente a los enemigos</small>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(notificacion);
+    
+    // Desaparecer despues de 8 segundos
+    setTimeout(() => {
+        notificacion.classList.remove('show');
+        setTimeout(() => notificacion.remove(), 300);
+    }, 8000);
+}
+
+// Funcion que solo actualiza edificios sin limpiar tropas/enemigos
+function actualizarEdificiosEnGrid() {
+    fetch('api/buildings/get_my_buildings.php')
+        .then(response => response.json())
+        .then(data => {
+            // Limpiar solo los edificios
+            document.querySelectorAll('.grid-cell').forEach(cell => {
+                // Guardar tropas y enemigos antes de limpiar
+                const tropas = cell.querySelectorAll('.tropa-container');
+                const enemigos = cell.querySelectorAll('.enemigo-container');
+                
+                // Limpiar clase y contenido del edificio
+                cell.classList.remove('occupied');
+                
+                // Remover solo elementos que no sean tropas ni enemigos
+                Array.from(cell.children).forEach(child => {
+                    if (!child.classList.contains('tropa-container') && 
+                        !child.classList.contains('enemigo-container')) {
+                        child.remove();
+                    }
+                });
+            });
+            
+            // Redibujar solo edificios
+            const posicionesOcupadas = new Set();
+            
+            data.terminados.forEach(edificio => {
+                let posicion = edificio.posicion_x || null;
+                
+                if (edificio.tipo === 'ayuntamiento' && !posicion) {
+                    posicion = 40;
+                    actualizarPosicionEdificio(edificio.id, posicion);
+                }
+                
+                if (!posicion || posicionesOcupadas.has(posicion)) {
+                    posicion = encontrarPosicionLibre(posicionesOcupadas);
+                    actualizarPosicionEdificio(edificio.id, posicion);
+                }
+                
+                posicionesOcupadas.add(posicion);
+                
+                const cell = document.querySelector(`[data-position="${posicion}"]`);
+                if (cell) {
+                    cell.classList.add('occupied');
+                    
+                    const emoji = edificioEmojis[edificio.tipo] || '🏗️';
+                    
+                    let claseEdificio = 'building-emoji';
+                    if (edificio.esta_destruido == 1) {
+                        claseEdificio += ' edificio-destruido';
+                    }
+                    
+                    let html = `<span class="${claseEdificio}">${emoji}</span>`;
+                    
+                    // Insertar edificio al principio (debajo de tropas y enemigos)
+                    cell.insertAdjacentHTML('afterbegin', html);
+                    
+                    if (edificio.esta_destruido == 0) {
+                        cell.onclick = () => mostrarInfoEdificio(edificio);
+                        cell.style.cursor = 'pointer';
+                    } else {
+                        cell.title = `${edificio.nombre} (Destruido)`;
+                        cell.style.cursor = 'pointer';
+                        cell.onclick = () => {
+                            repararEdificio();
+                        };
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error al actualizar edificios:', error);
+        });
 }

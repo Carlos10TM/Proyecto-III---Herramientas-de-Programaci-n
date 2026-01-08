@@ -145,23 +145,23 @@ try {
         }
     }
     
-    // ===============================
-    // FASE 2: TROPAS ATACAN ENEMIGOS
-    // ===============================
-    
-    // Obtener tropas del jugador
-    $query = "SELECT uj.*, uc.ataque, uc.nombre as tropa_nombre
-              FROM unidades_jugador uj
-              JOIN unidades_catalogo uc ON uj.unidad_catalogo_id = uc.id
-              WHERE uj.jugador_id = ? 
-              AND uj.cantidad > 0";
-    
+    // =======================================================
+    // FASE 2: TROPAS ATACAN ENEMIGOS Y ENEMIGOS CONTRAATACAN
+    // =======================================================
+
+    // Obtener tropas del jugador con su vida actual
+    $query = "SELECT uj.*, uc.ataque, uc.nombre as tropa_nombre, uc.vida as vida_maxima
+            FROM unidades_jugador uj
+            JOIN unidades_catalogo uc ON uj.unidad_catalogo_id = uc.id
+            WHERE uj.jugador_id = ? 
+            AND uj.cantidad > 0";
+
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $jugador_id);
     $stmt->execute();
     $tropas = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    
-    // Las tropas atacan a los enemigos mas cercanos
+
+    // Las tropas atacan a los enemigos
     foreach ($tropas as $tropa) {
         $cantidad_tropas = $tropa['cantidad'];
         $daño_por_tropa = $tropa['ataque'];
@@ -176,13 +176,13 @@ try {
                     
                     // Actualizar vida del enemigo
                     $query = "UPDATE enemigos_activos 
-                              SET vida_actual = ? 
-                              WHERE id = ?";
+                            SET vida_actual = ? 
+                            WHERE id = ?";
                     $stmt = $conn->prepare($query);
                     $stmt->bind_param("ii", $nueva_vida, $enemigo['id']);
                     $stmt->execute();
                     
-                    // Actualizar en el array local para los proximos calculos
+                    // Actualizar en el array local
                     $enemigos[$key]['vida_actual'] = $nueva_vida;
                     
                     $acciones[] = [
@@ -196,8 +196,8 @@ try {
                     // Si el enemigo murio, marcarlo
                     if ($nueva_vida <= 0) {
                         $query = "UPDATE enemigos_activos 
-                                  SET esta_muerto = 1, vida_actual = 0 
-                                  WHERE id = ?";
+                                SET esta_muerto = 1, vida_actual = 0 
+                                WHERE id = ?";
                         $stmt = $conn->prepare($query);
                         $stmt->bind_param("i", $enemigo['id']);
                         $stmt->execute();
@@ -206,6 +206,36 @@ try {
                             'tipo' => 'enemigo_muerto',
                             'enemigo' => $enemigo['enemigo_nombre']
                         ];
+                    } else {
+                        // Enemigo contraataca si sigue vivo
+                        $daño_contraataque = $enemigo['ataque'];
+                        $vida_actual_tropa = $tropa['vida_actual'] ?? $tropa['vida_maxima'];
+                        $nueva_vida_tropa = max(0, $vida_actual_tropa - $daño_contraataque);
+                        
+                        // Si la tropa muere, reducir cantidad
+                        if ($nueva_vida_tropa <= 0) {
+                            $query = "UPDATE unidades_jugador 
+                                    SET cantidad = cantidad - 1,
+                                        vida_actual = ?
+                                    WHERE id = ? AND cantidad > 0";
+                            $stmt = $conn->prepare($query);
+                            $vida_maxima = $tropa['vida_maxima'];
+                            $stmt->bind_param("ii", $vida_maxima, $tropa['id']);
+                            $stmt->execute();
+                            
+                            $acciones[] = [
+                                'tipo' => 'tropa_muerta',
+                                'tropa' => $tropa['tropa_nombre']
+                            ];
+                        } else {
+                            // Actualizar vida de la tropa
+                            $query = "UPDATE unidades_jugador 
+                                    SET vida_actual = ? 
+                                    WHERE id = ?";
+                            $stmt = $conn->prepare($query);
+                            $stmt->bind_param("ii", $nueva_vida_tropa, $tropa['id']);
+                            $stmt->execute();
+                        }
                     }
                     
                     // Una tropa ataca un solo enemigo por iteracion

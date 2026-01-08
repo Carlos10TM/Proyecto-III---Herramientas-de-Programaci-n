@@ -11,7 +11,7 @@ if (!isset($_SESSION['jugador_id'])) {
 $jugador_id = $_SESSION['jugador_id'];
 
 // Obtener edificios terminados
-$query = "SELECT ej.*, ec.nombre, ec.tipo, ec.descripcion, ec.emoji,
+$query = "SELECT ej.*, ec.nombre, ec.tipo, ec.descripcion,
           -- Estadisticas del nivel actual
           en_actual.generacion_por_minuto as generacion_actual,
           en_actual.bonus_tropas as bonus_tropas_actual,
@@ -46,7 +46,7 @@ while ($row = $result->fetch_assoc()) {
 }
 
 // Obtener edificios en construccion o mejora
-$query = "SELECT ej.*, ec.nombre, ec.tipo, ec.descripcion, ec.emoji,
+$query = "SELECT ej.*, ec.nombre, ec.tipo, ec.descripcion,
           en.tiempo_construccion,
           TIMESTAMPDIFF(SECOND, NOW(), ej.tiempo_finalizacion) as segundos_restantes
           FROM edificios_jugador ej
