@@ -27,12 +27,10 @@ if (!$estado || !$estado['oleada_en_curso']) {
     exit();
 }
 
-// Funciones auxiliares para calcular distancia y posiciones adyacentes
-function posicionACoordenadas($posicion) {
-    return [
-        'fila' => floor($posicion / 9),
-        'columna' => $posicion % 9
-    ];
+function sonAdyacentes($pos1, $pos2) {
+    $distancia = calcularDistancia($pos1, $pos2);
+    // Considerar adyacentes si estan en la misma posición O a distancia 1
+    return $distancia === 0 || $distancia === 1;
 }
 
 function calcularDistancia($pos1, $pos2) {
@@ -41,8 +39,11 @@ function calcularDistancia($pos1, $pos2) {
     return abs($coord1['fila'] - $coord2['fila']) + abs($coord1['columna'] - $coord2['columna']);
 }
 
-function sonAdyacentes($pos1, $pos2) {
-    return calcularDistancia($pos1, $pos2) === 1;
+function posicionACoordenadas($posicion) {
+    return [
+        'fila' => floor($posicion / 9),
+        'columna' => $posicion % 9
+    ];
 }
 
 // Iniciar transaccion
@@ -54,55 +55,46 @@ try {
     // ===================================
     // FASE 1: OBTENER TODOS LAS UNIDADES
     // ===================================
-    
+
+    // Recibir posiciones de tropas desde el cliente
+    $input = json_decode(file_get_contents('php://input'), true);
+    $posiciones_tropas_cliente = $input['posiciones_tropas'] ?? [];
+
     // Obtener enemigos vivos con posicion en el grid
     $query = "SELECT ea.*, ec.ataque, ec.nombre as enemigo_nombre
-              FROM enemigos_activos ea
-              JOIN enemigos_catalogo ec ON ea.enemigo_catalogo_id = ec.id
-              WHERE ea.jugador_id = ? 
-              AND ea.esta_muerto = 0
-              AND ea.posicion >= 0";
-    
+            FROM enemigos_activos ea
+            JOIN enemigos_catalogo ec ON ea.enemigo_catalogo_id = ec.id
+            WHERE ea.jugador_id = ? 
+            AND ea.esta_muerto = 0
+            AND ea.posicion >= 0";
+
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $jugador_id);
     $stmt->execute();
     $enemigos = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    
-    // Obtener tropas del jugador con posiciones (simuladas en PHP)
-    $query = "SELECT uj.*, uc.ataque, uc.nombre as tropa_nombre, uc.vida as vida_maxima
-              FROM unidades_jugador uj
-              JOIN unidades_catalogo uc ON uj.unidad_catalogo_id = uc.id
-              WHERE uj.jugador_id = ? 
-              AND uj.cantidad > 0";
-    
-    $stmt = $conn->prepare($query);
-    $stmt->bind_param("i", $jugador_id);
-    $stmt->execute();
-    $tropas_info = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    
+
+    // Usar las posiciones recibidas del cliente
     $tropas = [];
-    foreach ($tropas_info as $tropa_info) {
-        for ($i = 0; $i < $tropa_info['cantidad']; $i++) {
-            $tropas[] = [
-                'id' => $tropa_info['id'],
-                'tropa_individual_id' => $tropa_info['id'] . '_' . $i,
-                'nombre' => $tropa_info['tropa_nombre'],
-                'ataque' => $tropa_info['ataque'],
-                'vida_actual' => $tropa_info['vida_actual'] ?? $tropa_info['vida_maxima'],
-                'vida_maxima' => $tropa_info['vida_maxima'],
-                'posicion' => rand(0, 80) // Posicion aleatoria temporal
-            ];
-        }
+    foreach ($posiciones_tropas_cliente as $tropa_data) {
+        $tropas[] = [
+            'id' => $tropa_data['id'],
+            'tropa_individual_id' => $tropa_data['individual_id'],
+            'nombre' => $tropa_data['nombre'],
+            'ataque' => $tropa_data['ataque'],
+            'vida_actual' => $tropa_data['vida_actual'],
+            'vida_maxima' => $tropa_data['vida_maxima'],
+            'posicion' => $tropa_data['posicion']
+        ];
     }
-    
+
     // Obtener edificios no destruidos
     $query = "SELECT ej.*, ec.nombre as edificio_nombre
-              FROM edificios_jugador ej
-              JOIN edificios_catalogo ec ON ej.edificio_catalogo_id = ec.id
-              WHERE ej.jugador_id = ? 
-              AND ej.esta_destruido = 0
-              AND ej.posicion_x IS NOT NULL";
-    
+            FROM edificios_jugador ej
+            JOIN edificios_catalogo ec ON ej.edificio_catalogo_id = ec.id
+            WHERE ej.jugador_id = ? 
+            AND ej.esta_destruido = 0
+            AND ej.posicion_x IS NOT NULL";
+
     $stmt = $conn->prepare($query);
     $stmt->bind_param("i", $jugador_id);
     $stmt->execute();
@@ -111,23 +103,51 @@ try {
     // ==================================
     // FASE 2: COMBATE TROPAS VS ENEMIGOS
     // ==================================
-    
+
+    error_log("=== INICIO FASE 2 COMBATE ===");
+    error_log("Total tropas disponibles: " . count($tropas));
+    error_log("Total enemigos disponibles: " . count($enemigos));
+
     $tropas_muertas = [];
-    
+
     // Si hay tropas, los enemigos priorizan atacarlas
     if (count($tropas) > 0) {
+        error_log("HAY TROPAS - Iniciando combate");
+        
         // Cada enemigo busca una tropa adyacente para atacar
         foreach ($enemigos as $key_enemigo => $enemigo) {
+            if ($enemigo['vida_actual'] <= 0) {
+                error_log("Enemigo {$enemigo['enemigo_nombre']} está muerto, skip");
+                continue;
+            }
+            
+            error_log("Enemigo {$enemigo['enemigo_nombre']} buscando objetivo desde posición {$enemigo['posicion']}");
+            
             $objetivo_encontrado = false;
             
             // Buscar tropas adyacentes
             foreach ($tropas as $key_tropa => $tropa) {
-                if (sonAdyacentes($enemigo['posicion'], $tropa['posicion'])) {
+                if ($tropa['vida_actual'] <= 0) {
+                    error_log("  - Tropa {$tropa['nombre']} está muerta, skip");
+                    continue;
+                }
+                
+                $distancia = calcularDistancia($enemigo['posicion'], $tropa['posicion']);
+                $es_adyacente = sonAdyacentes($enemigo['posicion'], $tropa['posicion']);
+                
+                error_log("  - Revisando tropa {$tropa['nombre']} en posición {$tropa['posicion']}");
+                error_log("    Distancia: {$distancia}, Es adyacente: " . ($es_adyacente ? 'SI' : 'NO'));
+                
+                if ($es_adyacente) {
+                    error_log("    ¡ADYACENTE ENCONTRADO! Enemigo atacará");
+                    
                     // Enemigo ataca tropa
                     $daño = $enemigo['ataque'];
                     $nueva_vida = max(0, $tropa['vida_actual'] - $daño);
                     
                     $tropas[$key_tropa]['vida_actual'] = $nueva_vida;
+                    
+                    error_log("    Daño: {$daño}, Vida restante: {$nueva_vida}");
                     
                     $acciones[] = [
                         'tipo' => 'enemigo_ataca_tropa',
@@ -139,52 +159,85 @@ try {
                     
                     // Si la tropa murio
                     if ($nueva_vida <= 0) {
+                        error_log("    ¡TROPA MUERTA!");
                         $tropas_muertas[] = $tropa['id'];
-                        unset($tropas[$key_tropa]);
+                        $tropas[$key_tropa]['vida_actual'] = 0;
                         
                         $acciones[] = [
                             'tipo' => 'tropa_muerta',
                             'tropa' => $tropa['nombre']
                         ];
-                    } else {
-                        // Actualizar vida en BD
-                        $query = "UPDATE unidades_jugador 
-                                  SET vida_actual = ? 
-                                  WHERE id = ?";
-                        $stmt = $conn->prepare($query);
-                        $stmt->bind_param("ii", $nueva_vida, $tropa['id']);
-                        $stmt->execute();
                     }
                     
                     $objetivo_encontrado = true;
                     break; // Un enemigo ataca solo una tropa por turno
                 }
             }
+            
+            if (!$objetivo_encontrado) {
+                error_log("  - NO encontró tropa adyacente");
+            }
         }
         
-        // Reducir cantidad de tropas muertas
-        foreach (array_count_values($tropas_muertas) as $tropa_id => $cantidad_muertas) {
-            $query = "UPDATE unidades_jugador 
-                      SET cantidad = GREATEST(0, cantidad - ?),
-                          vida_actual = (SELECT vida FROM unidades_catalogo WHERE id = unidad_catalogo_id)
-                      WHERE id = ?";
-            $stmt = $conn->prepare($query);
-            $stmt->bind_param("ii", $cantidad_muertas, $tropa_id);
-            $stmt->execute();
+        error_log("Tropas muertas en este turno: " . count($tropas_muertas));
+        
+        // Reducir cantidad de tropas muertas en la BD
+        if (count($tropas_muertas) > 0) {
+            foreach (array_count_values($tropas_muertas) as $tropa_id => $cantidad_muertas) {
+                error_log("Reduciendo {$cantidad_muertas} unidades de tropa ID {$tropa_id}");
+                
+                $query = "UPDATE unidades_jugador 
+                        SET cantidad = GREATEST(0, cantidad - ?)
+                        WHERE id = ? AND jugador_id = ?";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("iii", $cantidad_muertas, $tropa_id, $jugador_id);
+                $stmt->execute();
+                
+                // Si la cantidad llega a 0, eliminar las posiciones
+                $query = "DELETE FROM posiciones_tropas 
+                        WHERE jugador_id = ? AND unidad_jugador_id = ?";
+                $stmt = $conn->prepare($query);
+                $stmt->bind_param("ii", $jugador_id, $tropa_id);
+                $stmt->execute();
+            }
         }
+        
+        error_log("--- CONTRAATAQUE DE TROPAS ---");
         
         // Tropas contraatacan a enemigos adyacentes
-        foreach ($tropas as $tropa) {
+        foreach ($tropas as $key_tropa => $tropa) {
+            if ($tropa['vida_actual'] <= 0) {
+                error_log("Tropa {$tropa['nombre']} está muerta, skip contraataque");
+                continue;
+            }
+            
+            error_log("Tropa {$tropa['nombre']} buscando enemigo desde posición {$tropa['posicion']}");
+            
             foreach ($enemigos as $key_enemigo => $enemigo) {
-                if (sonAdyacentes($tropa['posicion'], $enemigo['posicion'])) {
+                if ($enemigo['vida_actual'] <= 0) {
+                    error_log("  - Enemigo {$enemigo['enemigo_nombre']} está muerto, skip");
+                    continue;
+                }
+                
+                $distancia = calcularDistancia($tropa['posicion'], $enemigo['posicion']);
+                $es_adyacente = sonAdyacentes($tropa['posicion'], $enemigo['posicion']);
+                
+                error_log("  - Revisando enemigo {$enemigo['enemigo_nombre']} en posición {$enemigo['posicion']}");
+                error_log("    Distancia: {$distancia}, Es adyacente: " . ($es_adyacente ? 'SI' : 'NO'));
+                
+                if ($es_adyacente) {
+                    error_log("    ¡ADYACENTE ENCONTRADO! Tropa contraatacará");
+                    
                     // Tropa ataca enemigo
                     $daño = $tropa['ataque'];
                     $nueva_vida = max(0, $enemigo['vida_actual'] - $daño);
                     
+                    error_log("    Daño: {$daño}, Vida restante: {$nueva_vida}");
+                    
                     // Actualizar vida del enemigo
                     $query = "UPDATE enemigos_activos 
-                              SET vida_actual = ? 
-                              WHERE id = ?";
+                            SET vida_actual = ? 
+                            WHERE id = ?";
                     $stmt = $conn->prepare($query);
                     $stmt->bind_param("ii", $nueva_vida, $enemigo['id']);
                     $stmt->execute();
@@ -201,9 +254,11 @@ try {
                     
                     // Si el enemigo murio
                     if ($nueva_vida <= 0) {
+                        error_log("    ¡ENEMIGO MUERTO!");
+                        
                         $query = "UPDATE enemigos_activos 
-                                  SET esta_muerto = 1, vida_actual = 0 
-                                  WHERE id = ?";
+                                SET esta_muerto = 1, vida_actual = 0 
+                                WHERE id = ?";
                         $stmt = $conn->prepare($query);
                         $stmt->bind_param("i", $enemigo['id']);
                         $stmt->execute();
@@ -213,14 +268,20 @@ try {
                             'enemigo' => $enemigo['enemigo_nombre']
                         ];
                         
-                        unset($enemigos[$key_enemigo]);
+                        $enemigos[$key_enemigo]['vida_actual'] = 0;
                     }
                     
                     break; // Una tropa ataca solo un enemigo por turno
                 }
             }
         }
+        
+        error_log("Total acciones generadas: " . count($acciones));
+    } else {
+        error_log("NO HAY TROPAS - Saltando al ataque de edificios");
     }
+
+    error_log("=== FIN FASE 2 COMBATE ===");
     
     // ===============================
     // FASE 3: TORRES ATACAN ENEMIGOS

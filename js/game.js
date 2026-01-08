@@ -26,6 +26,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Iniciar visualizacion de tropas
     iniciarVisualizacionTropas();
+
+    // Iniciar actualizacion de vida de edificios
+    iniciarActualizacionVidaEdificios();
+
+    // Iniciar verificacion de reparaciones
+    iniciarVerificacionReparaciones();
+
+    // Iniciar actualizacion global
+    iniciarActualizacionGlobal()
 });
 
 // ======================================
@@ -981,67 +990,65 @@ function cargarEdificiosEnGrid(edificios) {
     edificios.forEach(edificio => {
         let posicion = edificio.posicion_x || null;
         
-        // Si es ayuntamiento y no tiene posicion, ponerlo en el centro
         if (edificio.tipo === 'ayuntamiento' && !posicion) {
-            posicion = 40; // Centro del grid 9x9
+            posicion = 40;
             actualizarPosicionEdificio(edificio.id, posicion);
         }
         
-        // Si no tiene posicion o la posicion ya esta ocupada, asignar una nueva
         if (!posicion || posicionesOcupadas.has(posicion)) {
             posicion = encontrarPosicionLibre(posicionesOcupadas);
             actualizarPosicionEdificio(edificio.id, posicion);
         }
         
-        // Marcar la posicion como ocupada
         posicionesOcupadas.add(posicion);
         
-        // Colocar el edificio en el grid
         const cell = document.querySelector(`[data-position="${posicion}"]`);
         if (cell) {
             cell.classList.add('occupied');
             
             const emoji = edificioEmojis[edificio.tipo] || '🏗️';
             
-            // Determinar clases segun si esta destruido
+            // Determinar clase: destruido o en reparacion se ven igual
             let claseEdificio = 'building-emoji';
-            if (edificio.esta_destruido == 1) {
+            if (edificio.esta_destruido == 1 || edificio.en_construccion == 1) {
                 claseEdificio += ' edificio-destruido';
             }
             
-            // Construir el HTML
             let html = `<span class="${claseEdificio}" data-edificio-id="${edificio.id}">${emoji}</span>`;
-            cell.title = `${edificio.nombre}`;
             cell.innerHTML = html;
             
-            if (edificio.tipo === 'torre') {
-                html += `<span class="torre-rango-indicator">📡</span>`;
-            }
-
-            // Configurar eventos segun si esta destruido
-            if (edificio.esta_destruido == 0) {
-                // Edificio intacto: mostrar info normal
-                cell.onclick = () => mostrarInfoEdificio(edificio);
-                cell.style.cursor = 'pointer';
-            } else {
-                // Edificio destruido: mostrar mensaje
+            // Configurar eventos
+            if (edificio.esta_destruido == 1 && edificio.en_construccion == 0) {
+                // Edificio destruido pero no en reparacion
                 cell.title = `${edificio.nombre} (Destruido)`;
-                cell.style.cursor = 'pointer'; // Cambiar a pointer para permitir clic
+                cell.style.cursor = 'pointer';
                 cell.onclick = () => {
                     mostrarOpcionesReparacion(edificio);
                 };
+            } else if (edificio.en_construccion == 1 && edificio.esta_destruido == 1) {
+                // Edificio en reparacion
+                cell.title = `${edificio.nombre} (Reparando...)`;
+                cell.style.cursor = 'default';
+                cell.onclick = () => {
+                    mostrarNotificacion('Edificio en reparación... 🔨', 'info', 2000);
+                };
+            } else {
+                // Edificio normal
+                cell.title = `${edificio.nombre}`;
+                cell.onclick = () => mostrarInfoEdificio(edificio);
+                cell.style.cursor = 'pointer';
             }
         }
     });
 
-    // Agregar efecto hover para torres (mostrar rango)
+    // Agregar hover para torres
     edificios.forEach(edificio => {
-        if (edificio.tipo === 'torre' && edificio.esta_destruido == 0) {
+        if (edificio.tipo === 'torre' && edificio.esta_destruido == 0 && edificio.en_construccion == 0) {
             const cell = document.querySelector(`[data-position="${edificio.posicion_x}"]`);
             
             if (cell) {
                 cell.addEventListener('mouseenter', function() {
-                    mostrarRangoTorre(edificio.posicion_x, 2); // Rango 2
+                    mostrarRangoTorre(edificio.posicion_x, 2);
                 });
                 
                 cell.addEventListener('mouseleave', function() {
@@ -1083,14 +1090,15 @@ function mostrarOpcionesReparacion(edificio) {
                 <small>Este edificio fue destruido en combate y necesita reparación</small>
             </div>
             
-            <h6 class="mb-2"><strong>Costo de Reparación (50% descuento):</strong></h6>
+            <h6 class="mb-2"><strong>Costo de Reparación:</strong></h6>
             <div class="d-flex justify-content-around mb-3">
-                ${costoMadera > 0 ? `<span><i class="fas fa-tree text-success"></i> ${costoMadera}</span>` : ''}
-                ${costoPiedra > 0 ? `<span><i class="fas fa-mountain text-secondary"></i> ${costoPiedra}</span>` : ''}
-                ${costoComida > 0 ? `<span><i class="fas fa-bread-slice text-danger"></i> ${costoComida}</span>` : ''}
+                ${costoMadera > 0 ? `<span> 🪵 ${costoMadera}</span>` : ''}
+                ${costoPiedra > 0 ? `<span> 🪨 ${costoPiedra}</span>` : ''}
+                ${costoComida > 0 ? `<span> 🍖 ${costoComida}</span>` : ''}
             </div>
             
-            <button class="btn btn-success w-100" onclick="repararEdificio(${edificio.id})">
+            <button class="btn btn-success w-100"
+                onclick="repararEdificio(${edificio.id}, this)">
                 <i class="fas fa-hammer"></i> Reparar Edificio
             </button>
         </div>
@@ -1260,6 +1268,28 @@ function mostrarInfoEdificio(edificio) {
         ${vidaHTML}
     `;
     
+    // Si es torre mostrar stats de ataque
+    if (edificio.tipo === 'torre') {           
+        if (edificio.ataque_torre || edificio.rango_ataque) {
+            mensaje += `<div class="row text-center mt-2 mb-2">
+                <div class="col-6">
+                    <div class="bg-danger bg-opacity-10 p-2 rounded">
+                        <div style="font-size: 1.5rem;">🎯</div>
+                        <small class="text-muted d-block">Ataque</small>
+                        <strong class="text-danger">${edificio.ataque_torre || 0}</strong>
+                    </div>
+                </div>
+                <div class="col-6">
+                    <div class="bg-info bg-opacity-10 p-2 rounded">
+                        <div style="font-size: 1.5rem;">📡</div>
+                        <small class="text-muted d-block">Rango</small>
+                        <strong class="text-info">${edificio.rango_ataque || 0} casillas</strong>
+                    </div>
+                </div>
+            </div>`;
+        }
+    }
+
     // Agregar estadisticas de generacion
     if (edificio.generacion_actual > 0) {
         mensaje += `<small><i class="fas fa-clock text-info"></i> Generando: <strong>${edificio.generacion_actual}/min</strong></small><br>`;
@@ -2359,11 +2389,35 @@ function procesarCombate() {
         return;
     }
     
+    // Preparar posiciones de tropas para enviar al servidor
+    const posicionesTropasArray = [];
+    tropasActivas.forEach(tropa => {
+        for (let i = 0; i < tropa.cantidad; i++) {
+            const tropaIndividualId = `${tropa.id}_${i}`;
+            const posicion = posicionesTropas.get(tropaIndividualId);
+            
+            if (posicion !== undefined) {
+                posicionesTropasArray.push({
+                    id: tropa.id,
+                    individual_id: tropaIndividualId,
+                    nombre: tropa.nombre,
+                    ataque: tropa.ataque,
+                    vida_actual: tropa.vida_actual,
+                    vida_maxima: tropa.vida_maxima,
+                    posicion: posicion
+                });
+            }
+        }
+    });
+    
     fetch('api/wave/process_combat.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+            posiciones_tropas: posicionesTropasArray
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -2371,7 +2425,7 @@ function procesarCombate() {
             // Procesar las acciones de combate para mostrar notificaciones
             procesarAccionesCombate(data.acciones);
             
-            // Si la oleada fue completada, mostrar notificacion de victoria
+            // Si la oleada fue completada mostrar notificacion de victoria
             if (data.oleada_completada) {
                 mostrarVictoriaOleada(data.acciones);
                 estadoOleada.oleadaEnCurso = false;
@@ -2390,22 +2444,42 @@ function procesarCombate() {
 
 // Funcion que procesa las acciones de combate y muestra notificaciones importantes
 function procesarAccionesCombate(acciones) {
+    // Mostrar todas las acciones en consola para debug
+    if (acciones.length > 0) {
+        console.log('Acciones de combate:', acciones);
+    }
+    
     // Solo mostrar notificaciones para acciones importantes
     acciones.forEach(accion => {
         switch(accion.tipo) {
             case 'edificio_destruido':
                 mostrarNotificacion(
-                    `¡Tu ${accion.edificio} ha sido destruido/a! 💥`,
+                    `💥 ¡Tu ${accion.edificio} ha sido destruido!`,
                     'error',
                     4000
                 );
-                // Recargar edificios para actualizar el grid
                 actualizarEdificiosEnGrid();
                 break;
                 
+            case 'tropa_ataca_enemigo':
+                console.log(`⚔️ ${accion.tropa} atacó a ${accion.enemigo} (-${accion.daño} HP)`);
+                break;
+                
+            case 'enemigo_ataca_tropa':
+                console.log(`👹 ${accion.enemigo} atacó a ${accion.tropa} (-${accion.daño} HP)`);
+                break;
+                
+            case 'tropa_muerta':
+                console.log(`⚰️ ${accion.tropa} ha caído en batalla`);
+                mostrarNotificacion(
+                    `⚰️ ${accion.tropa} ha caído en combate`,
+                    'warning',
+                    3000
+                );
+                break;
+                
             case 'enemigo_muerto':
-                // Solo registrar en consola
-                console.log(`${accion.enemigo} eliminado`);
+                console.log(`💀 ${accion.enemigo} eliminado`);
                 break;
         }
     });
@@ -2546,29 +2620,17 @@ function guardarPosicionesTropas() {
         posicionesObj[key] = posicion;
     });
     
-    // Guardar usando update_position para cada tropa
-    const posicionesArray = [];
-    for (let [key, posicion] of Object.entries(posicionesObj)) {
-        const [unidad_id, indice] = key.split('_');
-        posicionesArray.push({
-            unidad_id: parseInt(unidad_id),
-            indice: parseInt(indice),
-            posicion: posicion
-        });
-    }
-    
-    // Guardar en el servidor
-    fetch('api/buildings/update_position.php', {
+    fetch('api/units/save_positions.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            tipo: 'tropas',
-            posiciones: posicionesArray,
-            jugador_id: true // Flag para indicar que son tropas
+            posiciones: posicionesObj
         })
-    }).catch(error => {
+    })
+    .then(response => response.json())
+    .catch(error => {
         console.error('Error al guardar posiciones:', error);
     });
 }
@@ -2589,21 +2651,23 @@ function patrullarTropas() {
 }
 
 function moverTropasEnCombate() {
-    // Obtener posiciones de enemigos
-    const posicionesEnemigos = enemigosActivos.map(e => e.posicion).filter(p => p >= 0);
+    // Obtener posiciones de enemigos vivos
+    const posicionesEnemigos = enemigosActivos
+        .filter(e => e.vida_actual > 0)
+        .map(e => e.posicion)
+        .filter(p => p >= 0 && p <= 80);
     
     if (posicionesEnemigos.length === 0) {
-        return; // No hay enemigos, no mover tropas
+        return;
     }
     
-    // Mover cada tropa hacia el enemigo mas cercano
+    // Mover cada tropa hacia el enemigo más cercano
     posicionesTropas.forEach((posicionActual, tropaIndividualId) => {
         let enemigoMasCercano = null;
         let distanciaMinima = Infinity;
         
         posicionesEnemigos.forEach(posEnemigo => {
-            const distancia = Math.abs(Math.floor(posicionActual / 9) - Math.floor(posEnemigo / 9)) +
-                            Math.abs(posicionActual % 9 - posEnemigo % 9);
+            const distancia = calcularDistanciaManhattan(posicionActual, posEnemigo);
             
             if (distancia < distanciaMinima) {
                 distanciaMinima = distancia;
@@ -2611,7 +2675,8 @@ function moverTropasEnCombate() {
             }
         });
         
-        if (enemigoMasCercano !== null) {
+        if (enemigoMasCercano !== null && distanciaMinima > 1) {
+            // Solo moverse si no esta adyacente (distancia > 1)
             const nuevaPosicion = calcularMovimientoHacia(posicionActual, enemigoMasCercano);
             posicionesTropas.set(tropaIndividualId, nuevaPosicion);
         }
@@ -2619,6 +2684,14 @@ function moverTropasEnCombate() {
     
     dibujarTropasEnGrid();
     guardarPosicionesTropas();
+}
+
+function calcularDistanciaManhattan(pos1, pos2) {
+    const fila1 = Math.floor(pos1 / 9);
+    const col1 = pos1 % 9;
+    const fila2 = Math.floor(pos2 / 9);
+    const col2 = pos2 % 9;
+    return Math.abs(fila1 - fila2) + Math.abs(col1 - col2);
 }
 
 function calcularMovimientoHacia(posActual, posObjetivo) {
@@ -2648,19 +2721,40 @@ function calcularMovimientoHacia(posActual, posObjetivo) {
     return nuevaFila * 9 + nuevaCol;
 }
 
-// Funcion que dibuja las tropas en el grid
+function calcularMovimientoPatrullaje(posicionActual) {
+    const fila = Math.floor(posicionActual / 9);
+    const columna = posicionActual % 9;
+    
+    const movimientos = [];
+    
+    if (fila > 0) movimientos.push((fila - 1) * 9 + columna);
+    if (fila < 8) movimientos.push((fila + 1) * 9 + columna);
+    if (columna > 0) movimientos.push(fila * 9 + (columna - 1));
+    if (columna < 8) movimientos.push(fila * 9 + (columna + 1));
+    
+    if (movimientos.length > 0) {
+        return movimientos[Math.floor(Math.random() * movimientos.length)];
+    }
+    
+    return posicionActual;
+}
+
+function posicionInicialAleatoria() {
+    let posicion;
+    do {
+        posicion = Math.floor(Math.random() * 81);
+    } while (posicion === 40);
+    
+    return posicion;
+}
+
 function dibujarTropasEnGrid() {
-    // Limpiar tropas dibujadas previamente
     limpiarTropasDelGrid();
     
-    // Dibujar cada tropa
     tropasActivas.forEach(tropa => {
-        // Por cada unidad de este tipo de tropa, crear una visualizacion
         for (let i = 0; i < tropa.cantidad; i++) {
-            // Crear un ID unico para cada tropa
             const tropaIndividualId = `${tropa.id}_${i}`;
             
-            // Si esta tropa individual no tiene posicion asignarle una
             if (!posicionesTropas.has(tropaIndividualId)) {
                 posicionesTropas.set(tropaIndividualId, posicionInicialAleatoria());
             }
@@ -2673,21 +2767,17 @@ function dibujarTropasEnGrid() {
                 if (cell) {
                     const emoji = tropaEmojis[tropa.tipo] || '🛡️';
                     
-                    // Crear el contenedor de la tropa
                     const tropaDiv = document.createElement('div');
                     tropaDiv.className = 'tropa-container';
                     tropaDiv.dataset.tropaIndividualId = tropaIndividualId;
                     
-                    // Crear el contenedor del emoji
                     const tropaEmojiContainer = document.createElement('div');
                     tropaEmojiContainer.className = 'tropa-emoji-container';
                     
-                    // Crear el emoji de la tropa
                     const tropaEmoji = document.createElement('div');
                     tropaEmoji.className = 'tropa-emoji';
                     tropaEmoji.textContent = emoji;
                     
-                    // Agregar event listener para mostrar info de la tropa al hacer click
                     tropaEmoji.addEventListener('click', function(event) {
                         event.stopPropagation();
                         mostrarInfoTropaIndividual(tropa, emoji);
@@ -2695,7 +2785,6 @@ function dibujarTropasEnGrid() {
                     
                     tropaEmojiContainer.appendChild(tropaEmoji);
                     
-                    // Crear la barra de vida
                     const vidaContainer = document.createElement('div');
                     vidaContainer.className = 'tropa-vida-container';
                     
@@ -2715,7 +2804,6 @@ function dibujarTropasEnGrid() {
     });
 }
 
-// Funcion para mostrar info de tropa individual
 function mostrarInfoTropaIndividual(tropa, emoji) {
     const container = document.getElementById('notificaciones-container');
     
@@ -2728,7 +2816,6 @@ function mostrarInfoTropaIndividual(tropa, emoji) {
         max-width: 400px;
     `;
     
-    // Determinar color de la barra de vida
     const porcentajeVida = (tropa.vida_actual / tropa.vida_maxima) * 100;
     let colorVida = 'success';
     if (porcentajeVida < 30) colorVida = 'danger';
@@ -2783,49 +2870,9 @@ function mostrarInfoTropaIndividual(tropa, emoji) {
     }, 8000);
 }
 
-// Funcion que limpia todas las tropas del grid
 function limpiarTropasDelGrid() {
     const tropasEnGrid = document.querySelectorAll('.tropa-container');
     tropasEnGrid.forEach(tropa => tropa.remove());
-}
-
-// Funcion de patrullaje: mueve las tropas aleatoriamente por el grid
-function patrullarTropas() {
-    // Solo patrullar si no hay oleada en curso
-    if (estadoOleada.oleadaEnCurso) {
-        return;
-    }
-    
-    // Iterar sobre todas las posiciones de tropas individuales
-    posicionesTropas.forEach((posicionActual, tropaIndividualId) => {
-        // Calcular nueva posicion de patrullaje
-        const nuevaPosicion = calcularMovimientoPatrullaje(posicionActual);
-        posicionesTropas.set(tropaIndividualId, nuevaPosicion);
-    });
-    
-    // Redibujar tropas en nuevas posiciones
-    dibujarTropasEnGrid();
-}
-
-// Calcular movimiento de patrullaje aleatorio
-function calcularMovimientoPatrullaje(posicionActual) {
-    const fila = Math.floor(posicionActual / 9);
-    const columna = posicionActual % 9;
-    
-    // Movimientos posibles: arriba, abajo, izquierda, derecha
-    const movimientos = [];
-    
-    if (fila > 0) movimientos.push((fila - 1) * 9 + columna); // Arriba
-    if (fila < 8) movimientos.push((fila + 1) * 9 + columna); // Abajo
-    if (columna > 0) movimientos.push(fila * 9 + (columna - 1)); // Izquierda
-    if (columna < 8) movimientos.push(fila * 9 + (columna + 1)); // Derecha
-    
-    // Elegir un movimiento aleatorio
-    if (movimientos.length > 0) {
-        return movimientos[Math.floor(Math.random() * movimientos.length)];
-    }
-    
-    return posicionActual; // Si no hay movimientos validos quedarse en el mismo lugar
 }
 
 // Funcion que solo actualiza edificios sin limpiar tropas/enemigos
@@ -3004,7 +3051,7 @@ function activarModoMoverEdificio(edificioId, edificioNombre) {
             }
         };
         
-        // Guardar referencia al handler para poder removerlo después
+        // Guardar referencia al handler para poder removerlo despues
         cell._moveHandler = moveHandler;
         cell.addEventListener('click', moveHandler);
     });
@@ -3029,3 +3076,184 @@ function desactivarModoMoverEdificio() {
     // Limpiar indicadores de rango si los hay
     ocultarRangoTorre();
 }
+
+// ==============================================
+// SISTEMA DE ACTUALIZACIÓN DE VIDA DE EDIFICIOS
+// ==============================================
+
+let intervaloActualizacionVida = null;
+
+function iniciarActualizacionVidaEdificios() {
+    // Limpiar intervalo anterior si existe
+    if (intervaloActualizacionVida) {
+        clearInterval(intervaloActualizacionVida);
+    }
+    
+    // Actualizar cada segundo
+    intervaloActualizacionVida = setInterval(() => {
+        actualizarVidasEdificios();
+    }, 1000);
+}
+
+function actualizarVidasEdificios() {
+    // Solo durante oleada activa
+    if (!estadoOleada.oleadaEnCurso) return;
+    
+    fetch('api/buildings/get_my_buildings.php')
+        .then(response => response.json())
+        .then(data => {
+            data.terminados.forEach(edificio => {
+                if (edificio.posicion_x !== null) {
+                    const cell = document.querySelector(`[data-position="${edificio.posicion_x}"]`);
+                    if (cell) {
+                        const edificioElement = cell.querySelector('.building-emoji');
+                        if (edificioElement) {
+                            // Actualizar clase si fue destruido
+                            if (edificio.esta_destruido == 1 && !edificioElement.classList.contains('edificio-destruido')) {
+                                edificioElement.classList.add('edificio-destruido');
+                            }
+                            
+                            // Actualizar atributo de vida para hover
+                            edificioElement.dataset.vidaActual = edificio.vida_actual;
+                            edificioElement.dataset.vidaMaxima = edificio.vida_maxima;
+                        }
+                    }
+                }
+            });
+        })
+        .catch(error => {
+            console.error('Error al actualizar vidas:', error);
+        });
+}
+
+// ========================================
+// SISTEMA DE VERIFICACION DE REPARACIONES
+// ========================================
+
+function iniciarVerificacionReparaciones() {
+    console.log('Sistema de verificación de reparaciones iniciado');
+    
+    // Verificar cada 2 segundos
+    setInterval(() => {
+        verificarReparaciones();
+    }, 2000);
+}
+
+function verificarReparaciones() {
+    fetch('api/buildings/finish_construction.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success && data.finalizados > 0) {
+            mostrarNotificacion('¡Edificio reparado completamente!', 'success');
+            // Recargar grid para mostrar edificio reparado
+            cargarMisEdificiosParaGrid();
+        }
+    })
+    .catch(error => {
+        console.error('Error al verificar reparaciones:', error);
+    });
+}
+
+// ================================
+// SISTEMA DE ACTUALIZACION GLOBAL
+// ================================
+
+function iniciarActualizacionGlobal() {
+    console.log('Sistema de actualización global iniciado');
+    
+    setInterval(() => {
+        actualizarTodoElJuego();
+    }, 10000); // Cada 10 segundos
+}
+
+function actualizarTodoElJuego() {
+    // 1. Actualizar recursos
+    fetch('api/resources/generate.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            actualizarRecursos(data.recursos_actuales);
+        }
+    });
+    
+    // 2. Actualizar edificios en el grid
+    cargarMisEdificiosParaGrid();
+    
+    // 3. Actualizar tropas
+    actualizarTropas();
+    
+    // 4. Actualizar enemigos
+    actualizarEnemigos();
+    
+    // 5. Verificar construcciones/reparaciones finalizadas
+    verificarReparaciones();
+    
+    console.log('Actualización global completada');
+}
+
+
+// FUNCIÓN TEMPORAL DE DEBUG
+function mostrarPosicionesEnGrid() {
+    // Mostrar posiciones de tropas
+    posicionesTropas.forEach((pos, id) => {
+        const cell = document.querySelector(`[data-position="${pos}"]`);
+        if (cell) {
+            const badge = document.createElement('div');
+            badge.style.cssText = `
+                position: absolute;
+                top: 2px;
+                left: 2px;
+                background: blue;
+                color: white;
+                padding: 2px 4px;
+                font-size: 10px;
+                border-radius: 3px;
+                z-index: 1000;
+            `;
+            badge.textContent = `T:${pos}`;
+            cell.appendChild(badge);
+        }
+    });
+    
+    // Mostrar posiciones de enemigos
+    enemigosActivos.forEach(enemigo => {
+        if (enemigo.posicion >= 0) {
+            const cell = document.querySelector(`[data-position="${enemigo.posicion}"]`);
+            if (cell) {
+                const badge = document.createElement('div');
+                badge.style.cssText = `
+                    position: absolute;
+                    bottom: 2px;
+                    right: 2px;
+                    background: red;
+                    color: white;
+                    padding: 2px 4px;
+                    font-size: 10px;
+                    border-radius: 3px;
+                    z-index: 1000;
+                `;
+                badge.textContent = `E:${enemigo.posicion}`;
+                cell.appendChild(badge);
+            }
+        }
+    });
+}
+
+// Llamar cada 5 segundos para actualizar
+setInterval(() => {
+    if (estadoOleada.oleadaEnCurso) {
+        // Limpiar badges anteriores
+        document.querySelectorAll('.grid-cell > div[style*="z-index: 1000"]').forEach(b => b.remove());
+        mostrarPosicionesEnGrid();
+    }
+}, 5000);
