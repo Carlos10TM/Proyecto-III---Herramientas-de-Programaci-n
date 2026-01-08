@@ -2,6 +2,7 @@
 session_start();
 require_once '../../config/connection.php';
 
+// Verificar si el jugador esta logueado
 if (!isset($_SESSION['jugador_id'])) {
     http_response_code(401);
     echo json_encode(['error' => 'No autorizado']);
@@ -38,9 +39,23 @@ while ($row = $result->fetch_assoc()) {
     ];
 }
 
+// Obtener posiciones guardadas de tropas
+$query = "SELECT * FROM posiciones_tropas WHERE jugador_id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $jugador_id);
+$stmt->execute();
+$result = $stmt->get_result();
+
+$posiciones = [];
+while ($row = $result->fetch_assoc()) {
+    $key = $row['unidad_jugador_id'] . '_' . $row['indice_tropa'];
+    $posiciones[$key] = $row['posicion'];
+}
+
 echo json_encode([
     'success' => true,
     'tropas' => $tropas,
+    'posiciones' => $posiciones,
     'total_tropas' => array_sum(array_column($tropas, 'cantidad'))
 ]);
 ?>

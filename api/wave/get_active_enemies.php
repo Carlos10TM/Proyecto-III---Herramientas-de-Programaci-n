@@ -12,7 +12,7 @@ if (!isset($_SESSION['jugador_id'])) {
 $jugador_id = $_SESSION['jugador_id'];
 
 // Obtener todos los enemigos activos que no esten muertos
-$query = "SELECT ea.*, ec.nombre, ec.tipo, ec.vida as vida_maxima, ec.ataque,
+$query = "SELECT ea.*, ec.nombre, ec.tipo, ec.vida as vida_maxima, ec.ataque, ec.descripcion,
           eo.oleada_numero
           FROM enemigos_activos ea
           JOIN enemigos_catalogo ec ON ea.enemigo_catalogo_id = ec.id
@@ -36,7 +36,8 @@ while ($row = $result->fetch_assoc()) {
         'vida_maxima' => $row['vida_maxima'],
         'ataque' => $row['ataque'],
         'posicion' => $row['posicion'],
-        'oleada_numero' => $row['oleada_numero']
+        'oleada_numero' => $row['oleada_numero'],
+        'descripcion' => $row['descripcion']
     ];
 }
 

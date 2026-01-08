@@ -11,6 +11,10 @@ if (!isset($_SESSION['jugador_id'])) {
 
 $jugador_id = $_SESSION['jugador_id'];
 
+// Recibir posiciones de tropas desde el cliente
+$data = json_decode(file_get_contents('php://input'), true);
+$posiciones_tropas = $data['posiciones_tropas'] ?? [];
+
 // Obtener todos los enemigos vivos del jugador
 $query = "SELECT * FROM enemigos_activos 
           WHERE jugador_id = ? 
@@ -27,7 +31,6 @@ while ($row = $result->fetch_assoc()) {
     $enemigos[] = $row;
 }
 
-// Si no hay enemigos, no hacer nada
 if (count($enemigos) === 0) {
     echo json_encode([
         'success' => true,
@@ -54,83 +57,80 @@ while ($row = $result->fetch_assoc()) {
 }
 
 // Constantes del grid
-$GRID_SIZE = 9; // Grid de 9x9
-$CENTRO = 40; // Posicion central del grid (fila 4, columna 4)
+$GRID_SIZE = 9;
+$CENTRO = 40;
 
-// Funcion para convertir posicion lineal a coordenadas
+// Funciones auxiliares
 function posicionACoordenadas($posicion, $grid_size) {
     $fila = floor($posicion / $grid_size);
     $columna = $posicion % $grid_size;
     return ['fila' => $fila, 'columna' => $columna];
 }
 
-// Funcion para convertir coordenadas a posicion lineal
 function coordenadasAPosicion($fila, $columna, $grid_size) {
     return $fila * $grid_size + $columna;
 }
 
-// Funcion para calcular la siguiente posicion hacia el centro
-function calcularSiguientePosicion($posicion_actual, $centro, $grid_size, $posiciones_ocupadas) {
-    // Si el enemigo esta fuera del grid (posicion negativa), moverlo al borde
+function calcularDistancia($pos1, $pos2, $grid_size) {
+    $coord1 = posicionACoordenadas($pos1, $grid_size);
+    $coord2 = posicionACoordenadas($pos2, $grid_size);
+    return abs($coord1['fila'] - $coord2['fila']) + abs($coord1['columna'] - $coord2['columna']);
+}
+
+function calcularSiguientePosicion($posicion_actual, $posicion_objetivo, $grid_size, $posiciones_ocupadas) {
+    // Si el enemigo esta fuera del grid
     if ($posicion_actual < 0) {
-        // Elegir un borde aleatorio para entrar
         $lados = ['arriba', 'abajo', 'izquierda', 'derecha'];
         $lado = $lados[array_rand($lados)];
         
         switch($lado) {
             case 'arriba':
-                return rand(0, $grid_size - 1); // Primera fila
+                return rand(0, $grid_size - 1);
             case 'abajo':
-                return rand(($grid_size - 1) * $grid_size, $grid_size * $grid_size - 1); // Ultima fila
+                return rand(($grid_size - 1) * $grid_size, $grid_size * $grid_size - 1);
             case 'izquierda':
-                return rand(0, $grid_size - 1) * $grid_size; // Primera columna
+                return rand(0, $grid_size - 1) * $grid_size;
             case 'derecha':
-                return rand(0, $grid_size - 1) * $grid_size + ($grid_size - 1); // Ultima columna
+                return rand(0, $grid_size - 1) * $grid_size + ($grid_size - 1);
         }
     }
     
-    // Si ya llego al centro, quedarse ahi
-    if ($posicion_actual == $centro) {
-        return $centro;
+    // Si ya llego al objetivo
+    if ($posicion_actual == $posicion_objetivo) {
+        return $posicion_actual;
     }
     
-    // Obtener coordenadas actuales y del centro
     $actual = posicionACoordenadas($posicion_actual, $grid_size);
-    $centro_coord = posicionACoordenadas($centro, $grid_size);
+    $objetivo = posicionACoordenadas($posicion_objetivo, $grid_size);
     
-    // Calcular diferencias
-    $diff_fila = $centro_coord['fila'] - $actual['fila'];
-    $diff_columna = $centro_coord['columna'] - $actual['columna'];
+    $diff_fila = $objetivo['fila'] - $actual['fila'];
+    $diff_columna = $objetivo['columna'] - $actual['columna'];
     
-    // Decidir direccion de movimiento (priorizar la mayor diferencia)
     $nueva_fila = $actual['fila'];
     $nueva_columna = $actual['columna'];
     
+    // Priorizar la mayor diferencia
     if (abs($diff_fila) > abs($diff_columna)) {
-        // Moverse verticalmente
         if ($diff_fila > 0) {
-            $nueva_fila++; // Moverse hacia abajo
+            $nueva_fila++;
         } else if ($diff_fila < 0) {
-            $nueva_fila--; // Moverse hacia arriba
+            $nueva_fila--;
         }
     } else if ($diff_columna != 0) {
-        // Moverse horizontalmente
         if ($diff_columna > 0) {
-            $nueva_columna++; // Moverse hacia la derecha
+            $nueva_columna++;
         } else {
-            $nueva_columna--; // Moverse hacia la izquierda
+            $nueva_columna--;
         }
     }
     
-    // Verificar que la nueva posicion este dentro del grid
     $nueva_fila = max(0, min($grid_size - 1, $nueva_fila));
     $nueva_columna = max(0, min($grid_size - 1, $nueva_columna));
 
     $nueva_posicion = coordenadasAPosicion($nueva_fila, $nueva_columna, $grid_size);
 
-    // Verificar si la nueva posicion esta bloqueada por un edificio
+    // Si la nueva posicion está bloqueada por un edificio no moverse
     if (in_array($nueva_posicion, $posiciones_ocupadas)) {
-        // Si esta bloqueada, el enemigo se queda rompiendo el edificio
         return $posicion_actual;
     }
 
@@ -143,14 +143,30 @@ $conn->begin_transaction();
 
 try {
     foreach ($enemigos as $enemigo) {
+        $posicion_actual = $enemigo['posicion'];
+        
+        // Determinar objetivo segun si hay tropas o no
+        $objetivo = $CENTRO; // Por defecto ir al centro
+        
+        if (!empty($posiciones_tropas)) {
+            // Si hay tropas buscar la mas cercana
+            $distancia_minima = PHP_INT_MAX;
+            foreach ($posiciones_tropas as $pos_tropa) {
+                $distancia = calcularDistancia($posicion_actual, $pos_tropa, $GRID_SIZE);
+                if ($distancia < $distancia_minima) {
+                    $distancia_minima = $distancia;
+                    $objetivo = $pos_tropa;
+                }
+            }
+        }
+        
         $nueva_posicion = calcularSiguientePosicion(
-            $enemigo['posicion'], 
-            $CENTRO, 
+            $posicion_actual,
+            $objetivo,
             $GRID_SIZE,
             $posiciones_ocupadas
         );
         
-        // Actualizar la posicion en la base de datos
         $query = "UPDATE enemigos_activos 
                   SET posicion = ? 
                   WHERE id = ?";

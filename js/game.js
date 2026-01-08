@@ -894,7 +894,7 @@ function finalizarConstruccion(edificioId) {
 // SISTEMA DE GRID PARA LA BASE
 // ==============================
 
-// Mapeo de tipos de edificios a emojis (TEMPORAL)
+// Mapeo de tipos de edificios a emojis
 const edificioEmojis = {
     'ayuntamiento': '🏰',
     'aserradero': '🪵',
@@ -955,6 +955,29 @@ function cargarEdificiosEnGrid(edificios) {
     // Guardar las posiciones ya ocupadas en esta carga
     const posicionesOcupadas = new Set();
     
+    // Limpiar todos los eventos hover antiguos
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        const newCell = cell.cloneNode(true);
+        cell.parentNode.replaceChild(newCell, cell);
+    });
+    
+    // Obtener referencias actualizadas
+    const cells = document.querySelectorAll('.grid-cell');
+    
+    cells.forEach(cell => {
+        const tropas = cell.querySelectorAll('.tropa-container');
+        const enemigos = cell.querySelectorAll('.enemigo-container');
+        
+        cell.classList.remove('occupied');
+        
+        Array.from(cell.children).forEach(child => {
+            if (!child.classList.contains('tropa-container') && 
+                !child.classList.contains('enemigo-container')) {
+                child.remove();
+            }
+        });
+    });
+
     edificios.forEach(edificio => {
         let posicion = edificio.posicion_x || null;
         
@@ -987,10 +1010,14 @@ function cargarEdificiosEnGrid(edificios) {
             }
             
             // Construir el HTML
-            let html = `<span class="${claseEdificio}">${emoji}</span>`;
+            let html = `<span class="${claseEdificio}" data-edificio-id="${edificio.id}">${emoji}</span>`;
             cell.title = `${edificio.nombre}`;
             cell.innerHTML = html;
             
+            if (edificio.tipo === 'torre') {
+                html += `<span class="torre-rango-indicator">📡</span>`;
+            }
+
             // Configurar eventos segun si esta destruido
             if (edificio.esta_destruido == 0) {
                 // Edificio intacto: mostrar info normal
@@ -999,13 +1026,145 @@ function cargarEdificiosEnGrid(edificios) {
             } else {
                 // Edificio destruido: mostrar mensaje
                 cell.title = `${edificio.nombre} (Destruido)`;
-                cell.style.cursor = 'pointer';
+                cell.style.cursor = 'pointer'; // Cambiar a pointer para permitir clic
                 cell.onclick = () => {
-                    repararEdificio();
+                    mostrarOpcionesReparacion(edificio);
                 };
             }
         }
     });
+
+    // Agregar efecto hover para torres (mostrar rango)
+    edificios.forEach(edificio => {
+        if (edificio.tipo === 'torre' && edificio.esta_destruido == 0) {
+            const cell = document.querySelector(`[data-position="${edificio.posicion_x}"]`);
+            
+            if (cell) {
+                cell.addEventListener('mouseenter', function() {
+                    mostrarRangoTorre(edificio.posicion_x, 2); // Rango 2
+                });
+                
+                cell.addEventListener('mouseleave', function() {
+                    ocultarRangoTorre();
+                });
+            }
+        }
+    });
+}
+
+// Opciones de reparacion para edificios destruidos
+function mostrarOpcionesReparacion(edificio) {
+    const container = document.getElementById('notificaciones-container');
+    
+    // Calcular costos (50% del original)
+    const costoMadera = Math.ceil((edificio.costo_mejora_madera || 0) * 0.5);
+    const costoPiedra = Math.ceil((edificio.costo_mejora_piedra || 0) * 0.5);
+    const costoComida = Math.ceil((edificio.costo_mejora_comida || 0) * 0.5);
+    
+    const emoji = edificioEmojis[edificio.tipo] || '🏗️';
+    
+    const notificacion = document.createElement('div');
+    notificacion.className = 'alert alert-warning alert-dismissible fade show mb-2';
+    notificacion.style.cssText = `
+        box-shadow: 0 8px 25px rgba(255, 193, 7, 0.6); 
+        border: 3px solid #ffc107; 
+        font-size: 1rem;
+        max-width: 400px;
+    `;
+    
+    notificacion.innerHTML = `
+        <div class="text-center">
+            <button type="button" class="btn-close" data-bs-dismiss="alert" style="position: absolute; top: 10px; right: 10px;"></button>
+            
+            <div style="font-size: 3rem;">💥</div>
+            <h5 class="mt-2 mb-2"><strong>${emoji} ${edificio.nombre} (Destruido)</strong></h5>
+            
+            <div class="alert alert-danger mb-3">
+                <small>Este edificio fue destruido en combate y necesita reparación</small>
+            </div>
+            
+            <h6 class="mb-2"><strong>Costo de Reparación (50% descuento):</strong></h6>
+            <div class="d-flex justify-content-around mb-3">
+                ${costoMadera > 0 ? `<span><i class="fas fa-tree text-success"></i> ${costoMadera}</span>` : ''}
+                ${costoPiedra > 0 ? `<span><i class="fas fa-mountain text-secondary"></i> ${costoPiedra}</span>` : ''}
+                ${costoComida > 0 ? `<span><i class="fas fa-bread-slice text-danger"></i> ${costoComida}</span>` : ''}
+            </div>
+            
+            <button class="btn btn-success w-100" onclick="repararEdificio(${edificio.id})">
+                <i class="fas fa-hammer"></i> Reparar Edificio
+            </button>
+        </div>
+    `;
+    
+    container.appendChild(notificacion);
+    
+    setTimeout(() => {
+        notificacion.classList.remove('show');
+        setTimeout(() => notificacion.remove(), 300);
+    }, 10000);
+}
+
+function repararEdificio(edificioId) {
+    fetch('api/buildings/repair.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            edificio_id: edificioId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            mostrarNotificacion(
+                `🔨 ¡Reparación iniciada! Tiempo: ${data.tiempo_reparacion}s`,
+                'success',
+                4000
+            );
+            actualizarRecursos(data.recursos);
+            cargarMisEdificiosParaGrid();
+        } else {
+            mostrarNotificacion(data.error, 'error', 4000);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        mostrarNotificacion('Error al iniciar reparación', 'error', 3000);
+    });
+}
+
+// Mostrar rango de ataque de una torre
+function mostrarRangoTorre(posicionTorre, rango) {
+    const coord = posicionACoordenadas(posicionTorre);
+    
+    // Resaltar todas las celdas dentro del rango
+    for (let fila = 0; fila < 9; fila++) {
+        for (let col = 0; col < 9; col++) {
+            const posicion = fila * 9 + col;
+            const distancia = Math.abs(coord.fila - fila) + Math.abs(coord.columna - col);
+            
+            if (distancia <= rango && posicion !== posicionTorre) {
+                const cell = document.querySelector(`[data-position="${posicion}"]`);
+                if (cell) {
+                    cell.classList.add('celda-en-rango');
+                }
+            }
+        }
+    }
+}
+
+function ocultarRangoTorre() {
+    document.querySelectorAll('.celda-en-rango').forEach(cell => {
+        cell.classList.remove('celda-en-rango');
+    });
+}
+
+function posicionACoordenadas(posicion) {
+    return {
+        fila: Math.floor(posicion / 9),
+        columna: posicion % 9
+    };
 }
 
 // Encontrar una posicion libre en el grid, priorizando cercania al centro
@@ -1136,32 +1295,22 @@ function mostrarInfoEdificio(edificio) {
             <i class="fas fa-plus-circle"></i> Entrenar Tropas
         </button>`;
     }
-    
-    mostrarNotificacion(mensaje, 'info', 8000);
-}
 
-// Funcion para reparar edificio destruido
-function repararEdificio(edificioId) {
-    mostrarConfirmacion(
-        '¿Quieres reparar este edificio por la mitad del costo de construcción?',
-        () => {
-            fetch('api/buildings/repair.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ edificio_id: edificioId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    mostrarNotificacion('¡Edificio reparado! 🔨', 'success');
-                    actualizarRecursos(data.recursos);
-                    cargarMisEdificiosParaGrid();
-                } else {
-                    mostrarNotificacion(data.error, 'error');
-                }
-            });
+    // Boton para mover edificio (todos excepto ayuntamiento)
+    if (edificio.tipo !== 'ayuntamiento') {
+        // Verificar si hay oleada en curso
+        if (estadoOleada.oleadaEnCurso) {
+            mensaje += `<br><br><button class="btn btn-secondary btn-sm w-100 mt-2" disabled>
+                <i class="fas fa-lock"></i> No puedes mover edificios durante el combate.
+            </button>`;
+        } else {
+            mensaje += `<br><br><button class="btn btn-warning btn-sm w-100 mt-2" onclick="activarModoMoverEdificio(${edificio.id}, '${edificio.nombre}')">
+                <i class="fas fa-arrows-alt"></i> Mover Edificio
+            </button>`;
         }
-    );
+    }
+
+    mostrarNotificacion(mensaje, 'info', 8000);
 }
 
 // Cargar mis edificios terminados para el grid
@@ -2159,21 +2308,25 @@ function iniciarMovimientoEnemigos() {
 
 // Funcion que llama al API para mover todos los enemigos
 function moverEnemigos() {
-    // Solo mover si hay una oleada en curso
     if (!estadoOleada.oleadaEnCurso) {
         return;
     }
+    
+    // Obtener posiciones actuales de tropas
+    const posicionesTropasArray = Array.from(posicionesTropas.values());
     
     fetch('api/wave/move_enemies.php', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+            posiciones_tropas: posicionesTropasArray
+        })
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // El sistema de visualizacion automaticamente detectara los cambios de posicion en la proxima actualizacion
             console.log(`Movimiento: ${data.enemigos_movidos} enemigos se movieron`);
         }
     })
@@ -2321,29 +2474,24 @@ function mostrarVictoriaOleada(acciones) {
 // SISTEMA DE VISUALIZACION Y PATRULLAJE DE TROPAS
 // ================================================
 
-// Variable global para almacenar tropas y sus posiciones
 let tropasActivas = [];
-let posicionesTropas = new Map(); // Mapa de tropa_id -> posicion actual
+let posicionesTropas = new Map();
+let posicionesCargadas = false;
 
-// Iniciar el sistema de visualizacion de tropas
 function iniciarVisualizacionTropas() {
     console.log('Sistema de visualización de tropas iniciado');
     
-    // Cargar tropas inmediatamente
     actualizarTropas();
     
-    // Actualizar visualizacion cada 2 segundos
     setInterval(() => {
         actualizarTropas();
     }, 2000);
     
-    // Mover tropas (patrullaje) cada 3 segundos
     setInterval(() => {
         patrullarTropas();
     }, 3000);
 }
 
-// Funcion que obtiene las tropas del jugador
 function actualizarTropas() {
     fetch('api/units/get_my_units.php')
         .then(response => response.json())
@@ -2351,15 +2499,39 @@ function actualizarTropas() {
             if (data.success) {
                 tropasActivas = data.tropas;
                 
+                // Cargar posiciones guardadas en primera carga
+                if (!posicionesCargadas && data.posiciones) {
+                    for (let [key, posicion] of Object.entries(data.posiciones)) {
+                        posicionesTropas.set(key, posicion);
+                    }
+                    posicionesCargadas = true;
+                }
+                
                 // Inicializar posiciones de tropas nuevas
                 tropasActivas.forEach(tropa => {
-                    if (!posicionesTropas.has(tropa.id)) {
-                        // Asignar posición inicial aleatoria dentro del grid
-                        posicionesTropas.set(tropa.id, posicionInicialAleatoria());
+                    for (let i = 0; i < tropa.cantidad; i++) {
+                        const tropaIndividualId = `${tropa.id}_${i}`;
+                        
+                        if (!posicionesTropas.has(tropaIndividualId)) {
+                            posicionesTropas.set(tropaIndividualId, posicionInicialAleatoria());
+                        }
                     }
                 });
                 
-                // Dibujar tropas
+                // Limpiar posiciones de tropas que ya no existen
+                const tropasValidas = new Set();
+                tropasActivas.forEach(tropa => {
+                    for (let i = 0; i < tropa.cantidad; i++) {
+                        tropasValidas.add(`${tropa.id}_${i}`);
+                    }
+                });
+                
+                for (let key of posicionesTropas.keys()) {
+                    if (!tropasValidas.has(key)) {
+                        posicionesTropas.delete(key);
+                    }
+                }
+                
                 dibujarTropasEnGrid();
             }
         })
@@ -2368,15 +2540,112 @@ function actualizarTropas() {
         });
 }
 
-// Generar posicion inicial aleatoria para una tropa
-function posicionInicialAleatoria() {
-    // Elegir una posicion aleatoria dentro del grid (0-80) evitando el centro (40) porque esta el ayuntamiento
-    let posicion;
-    do {
-        posicion = Math.floor(Math.random() * 81);
-    } while (posicion === 40);
+function guardarPosicionesTropas() {
+    const posicionesObj = {};
+    posicionesTropas.forEach((posicion, key) => {
+        posicionesObj[key] = posicion;
+    });
     
-    return posicion;
+    // Guardar usando update_position para cada tropa
+    const posicionesArray = [];
+    for (let [key, posicion] of Object.entries(posicionesObj)) {
+        const [unidad_id, indice] = key.split('_');
+        posicionesArray.push({
+            unidad_id: parseInt(unidad_id),
+            indice: parseInt(indice),
+            posicion: posicion
+        });
+    }
+    
+    // Guardar en el servidor
+    fetch('api/buildings/update_position.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            tipo: 'tropas',
+            posiciones: posicionesArray,
+            jugador_id: true // Flag para indicar que son tropas
+        })
+    }).catch(error => {
+        console.error('Error al guardar posiciones:', error);
+    });
+}
+
+function patrullarTropas() {
+    if (estadoOleada.oleadaEnCurso) {
+        moverTropasEnCombate();
+        return;
+    }
+    
+    posicionesTropas.forEach((posicionActual, tropaIndividualId) => {
+        const nuevaPosicion = calcularMovimientoPatrullaje(posicionActual);
+        posicionesTropas.set(tropaIndividualId, nuevaPosicion);
+    });
+    
+    dibujarTropasEnGrid();
+    guardarPosicionesTropas();
+}
+
+function moverTropasEnCombate() {
+    // Obtener posiciones de enemigos
+    const posicionesEnemigos = enemigosActivos.map(e => e.posicion).filter(p => p >= 0);
+    
+    if (posicionesEnemigos.length === 0) {
+        return; // No hay enemigos, no mover tropas
+    }
+    
+    // Mover cada tropa hacia el enemigo mas cercano
+    posicionesTropas.forEach((posicionActual, tropaIndividualId) => {
+        let enemigoMasCercano = null;
+        let distanciaMinima = Infinity;
+        
+        posicionesEnemigos.forEach(posEnemigo => {
+            const distancia = Math.abs(Math.floor(posicionActual / 9) - Math.floor(posEnemigo / 9)) +
+                            Math.abs(posicionActual % 9 - posEnemigo % 9);
+            
+            if (distancia < distanciaMinima) {
+                distanciaMinima = distancia;
+                enemigoMasCercano = posEnemigo;
+            }
+        });
+        
+        if (enemigoMasCercano !== null) {
+            const nuevaPosicion = calcularMovimientoHacia(posicionActual, enemigoMasCercano);
+            posicionesTropas.set(tropaIndividualId, nuevaPosicion);
+        }
+    });
+    
+    dibujarTropasEnGrid();
+    guardarPosicionesTropas();
+}
+
+function calcularMovimientoHacia(posActual, posObjetivo) {
+    const filaActual = Math.floor(posActual / 9);
+    const colActual = posActual % 9;
+    const filaObjetivo = Math.floor(posObjetivo / 9);
+    const colObjetivo = posObjetivo % 9;
+    
+    const diffFila = filaObjetivo - filaActual;
+    const diffCol = colObjetivo - colActual;
+    
+    let nuevaFila = filaActual;
+    let nuevaCol = colActual;
+    
+    // Priorizar mayor diferencia
+    if (Math.abs(diffFila) > Math.abs(diffCol)) {
+        if (diffFila > 0) nuevaFila++;
+        else if (diffFila < 0) nuevaFila--;
+    } else if (diffCol !== 0) {
+        if (diffCol > 0) nuevaCol++;
+        else nuevaCol--;
+    }
+    
+    nuevaFila = Math.max(0, Math.min(8, nuevaFila));
+    nuevaCol = Math.max(0, Math.min(8, nuevaCol));
+    
+    return nuevaFila * 9 + nuevaCol;
 }
 
 // Funcion que dibuja las tropas en el grid
@@ -2502,10 +2771,6 @@ function mostrarInfoTropaIndividual(tropa, emoji) {
                         </div>
                     </div>
                 </div>
-                
-                <div class="alert alert-info mb-0 mt-2 py-2">
-                    <small><i class="fas fa-shield-alt"></i> Patrullando y defendiendo tu base</small>
-                </div>
             </div>
         </div>
     `;
@@ -2561,83 +2826,6 @@ function calcularMovimientoPatrullaje(posicionActual) {
     }
     
     return posicionActual; // Si no hay movimientos validos quedarse en el mismo lugar
-}
-
-// Mostrar informacion de las tropas al hacer click
-function mostrarInfoTropa(tropas, emoji) {
-    const container = document.getElementById('notificaciones-container');
-    
-    // Crear notificacion especial para tropas
-    const notificacion = document.createElement('div');
-    notificacion.className = 'alert alert-success alert-dismissible fade show mb-2';
-    notificacion.style.cssText = `
-        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.6); 
-        border: 3px solid #28a745; 
-        font-size: 1rem;
-        max-width: 400px;
-    `;
-    
-    // Construir HTML con informacion de todas las tropas en esta posicion
-    let tropasHTML = '';
-    let cantidadTotal = 0;
-    
-    tropas.forEach(tropa => {
-        cantidadTotal += tropa.cantidad;
-        tropasHTML += `
-            <div class="mb-2 pb-2 border-bottom">
-                <h6 class="mb-1"><strong>${tropa.nombre}</strong> x${tropa.cantidad}</h6>
-                <div class="row text-center mt-2">
-                    <div class="col-6">
-                        <div class="bg-danger bg-opacity-10 p-2 rounded">
-                            <div style="font-size: 1.2rem;">⚔️</div>
-                            <small class="text-muted d-block">Ataque</small>
-                            <strong class="text-danger">${tropa.ataque}</strong>
-                        </div>
-                    </div>
-                    <div class="col-6">
-                        <div class="bg-success bg-opacity-10 p-2 rounded">
-                            <div style="font-size: 1.2rem;">❤️</div>
-                            <small class="text-muted d-block">Vida</small>
-                            <strong class="text-success">${tropa.vida}</strong>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    });
-    
-    notificacion.innerHTML = `
-        <div class="d-flex align-items-start">
-            <div class="me-3 text-center">
-                <div style="font-size: 4rem; line-height: 1;">
-                    ${emoji}
-                </div>
-                ${cantidadTotal > 1 ? `<div class="badge bg-success mt-1">${cantidadTotal} Tropas</div>` : ''}
-            </div>
-            <div class="flex-grow-1">
-                <button type="button" class="btn-close" data-bs-dismiss="alert" style="position: absolute; top: 10px; right: 10px;"></button>
-                
-                <h5 class="mb-3">
-                    <strong>🛡️ Tropas Defensoras</strong>
-                    <span class="badge bg-success ms-2">Aliadas</span>
-                </h5>
-                
-                ${tropasHTML}
-                
-                <div class="alert alert-info mb-0 mt-2 py-2">
-                    <small><i class="fas fa-shield-alt"></i> Estas tropas patrullan tu base y atacan automáticamente a los enemigos</small>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    container.appendChild(notificacion);
-    
-    // Desaparecer despues de 8 segundos
-    setTimeout(() => {
-        notificacion.classList.remove('show');
-        setTimeout(() => notificacion.remove(), 300);
-    }, 8000);
 }
 
 // Funcion que solo actualiza edificios sin limpiar tropas/enemigos
@@ -2702,9 +2890,9 @@ function actualizarEdificiosEnGrid() {
                         cell.style.cursor = 'pointer';
                     } else {
                         cell.title = `${edificio.nombre} (Destruido)`;
-                        cell.style.cursor = 'pointer';
+                        cell.style.cursor = 'pointer'; // Cambiar a pointer para permitir click
                         cell.onclick = () => {
-                            repararEdificio();
+                            mostrarOpcionesReparacion(edificio);
                         };
                     }
                 }
@@ -2713,4 +2901,131 @@ function actualizarEdificiosEnGrid() {
         .catch(error => {
             console.error('Error al actualizar edificios:', error);
         });
+}
+
+// ===================================
+// SISTEMA DE MOVIMIENTO DE EDIFICIOS
+// ===================================
+
+let modoMoverEdificio = {
+    activo: false,
+    edificio_id: null,
+    edificio_nombre: '',
+    posicion_original: null
+};
+
+function activarModoMoverEdificio(edificioId, edificioNombre) {
+    // Guardar la posicion original del edificio
+    const edificioElement = document.querySelector(`[data-edificio-id="${edificioId}"]`);
+    if (edificioElement) {
+        const cell = edificioElement.closest('.grid-cell');
+        modoMoverEdificio.posicion_original = parseInt(cell.dataset.position);
+    }
+    
+    modoMoverEdificio.activo = true;
+    modoMoverEdificio.edificio_id = edificioId;
+    modoMoverEdificio.edificio_nombre = edificioNombre;
+    
+    mostrarNotificacion(
+        `Modo mover activado para ${edificioNombre}. Haz clic en una casilla vacía para moverlo.`,
+        'info',
+        5000
+    );
+    
+    // Remover eventos anteriores para evitar duplicados
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        const oldHandler = cell._moveHandler;
+        if (oldHandler) {
+            cell.removeEventListener('click', oldHandler);
+        }
+    });
+    
+    // Agregar evento de click a las celdas
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        cell.style.cursor = 'crosshair';
+        
+        const moveHandler = function(event) {
+            if (!modoMoverEdificio.activo) return;
+            
+            event.stopPropagation(); // Prevenir uso de mostrarInfoEdificio
+            
+            const posicion = parseInt(cell.dataset.position);
+            
+            // Validaciones
+            if (posicion < 0 || posicion > 80) {
+                mostrarNotificacion('Posición inválida', 'warning', 2000);
+                return;
+            }
+            
+            // No permitir mover al centro (posicion 40, reservada para el Ayuntamiento)
+            if (posicion === 40 && modoMoverEdificio.posicion_original !== 40) {
+                mostrarNotificacion('El centro está reservado para el Ayuntamiento', 'warning', 2000);
+                return;
+            }
+            
+            // Verificar que la celda este vacia o no sea la posicion original
+            const isOcupada = cell.classList.contains('occupied');
+            const esPosicionOriginal = posicion === modoMoverEdificio.posicion_original;
+            
+            if (!isOcupada || esPosicionOriginal) {
+                // Mover el edificio
+                fetch('api/buildings/update_position.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        edificio_id: modoMoverEdificio.edificio_id,
+                        posicion: posicion
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        mostrarNotificacion('Edificio movido exitosamente', 'success', 3000);
+                        
+                        // Recargar edificios para actualizar el grid
+                        cargarMisEdificiosParaGrid();
+                        
+                        // Desactivar modo
+                        desactivarModoMoverEdificio();
+                    } else {
+                        mostrarNotificacion('Error al mover edificio', 'error', 3000);
+                        desactivarModoMoverEdificio();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    mostrarNotificacion('Error al mover edificio', 'error', 3000);
+                    desactivarModoMoverEdificio();
+                });
+            } else {
+                mostrarNotificacion('Esa posición está ocupada', 'warning', 2000);
+            }
+        };
+        
+        // Guardar referencia al handler para poder removerlo después
+        cell._moveHandler = moveHandler;
+        cell.addEventListener('click', moveHandler);
+    });
+}
+
+function desactivarModoMoverEdificio() {
+    modoMoverEdificio.activo = false;
+    modoMoverEdificio.edificio_id = null;
+    modoMoverEdificio.edificio_nombre = '';
+    modoMoverEdificio.posicion_original = null;
+    
+    // Restaurar cursores y remover eventos
+    document.querySelectorAll('.grid-cell').forEach(cell => {
+        cell.style.cursor = 'pointer';
+        const handler = cell._moveHandler;
+        if (handler) {
+            cell.removeEventListener('click', handler);
+            delete cell._moveHandler;
+        }
+    });
+    
+    // Limpiar indicadores de rango si los hay
+    ocultarRangoTorre();
 }

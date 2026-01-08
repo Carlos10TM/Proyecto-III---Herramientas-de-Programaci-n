@@ -36,15 +36,12 @@ $stmt->bind_param("i", $jugador_id);
 $stmt->execute();
 $oleadas_completadas = $stmt->get_result()->fetch_assoc()['total'];
 
-// Contar todos los enemigos derrotados de todas las oleadas
-$query = "SELECT ec.tipo, ec.nombre, 
-          (SELECT COUNT(*) 
-           FROM enemigos_activos ea2
-           WHERE ea2.enemigo_catalogo_id = ec.id 
-           AND ea2.jugador_id = ? 
-           AND ea2.esta_muerto = 1) as cantidad
-          FROM enemigos_catalogo ec
-          HAVING cantidad > 0
+// Contar enemigos derrotados del historial
+$query = "SELECT ec.tipo, ec.nombre, SUM(edh.cantidad) as cantidad
+          FROM enemigos_derrotados_historial edh
+          JOIN enemigos_catalogo ec ON edh.enemigo_catalogo_id = ec.id
+          WHERE edh.jugador_id = ?
+          GROUP BY ec.tipo, ec.nombre
           ORDER BY cantidad DESC";
 $stmt = $conn->prepare($query);
 $stmt->bind_param("i", $jugador_id);
@@ -56,7 +53,6 @@ while ($row = $result->fetch_assoc()) {
     $enemigos_derrotados[] = $row;
 }
 
-// Calcular total de enemigos derrotados
 $total_enemigos_derrotados = array_sum(array_column($enemigos_derrotados, 'cantidad'));
 
 // Si hay oleada en curso obtener estadisticas actuales

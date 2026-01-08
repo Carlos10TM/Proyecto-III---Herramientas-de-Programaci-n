@@ -579,3 +579,43 @@ body {
 .building-emoji {
     transition: opacity 0.5s ease, filter 0.5s ease;
 }
+
+/* ========================================
+   ESTILOS PARA TORRES DE DEFENSA
+======================================== */
+
+/* Indicador visual de rango de torre */
+.torre-rango-indicator {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    font-size: 0.7rem;
+    padding: 2px 5px;
+    border-radius: 8px;
+    font-weight: bold;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+}
+
+/* Animacion de disparo de torre */
+@keyframes torreDisparo {
+    0%, 100% { 
+        transform: scale(1);
+    }
+    50% { 
+        transform: scale(1.15);
+    }
+}
+
+.torre-disparando {
+    animation: torreDisparo 0.3s ease;
+}
+
+/* Resaltar celdas dentro del rango cuando se hace hover en una torre */
+.celda-en-rango {
+    background: rgba(255, 107, 107, 0.2) !important;
+    border: 2px solid #ff6b6b !important;
+}

@@ -2,6 +2,7 @@
 session_start();
 require_once '../../config/connection.php';
 
+// Verificar que el usuario este logueado
 if (!isset($_SESSION['jugador_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'No autorizado']);
@@ -30,12 +31,31 @@ $query = "UPDATE edificios_jugador
               tiempo_finalizacion = NULL
           WHERE jugador_id = ? 
           AND en_construccion = 1
-          AND tiempo_finalizacion <= NOW()";
+          AND tiempo_finalizacion <= NOW()
+          AND esta_destruido = 0";
 
 $stmt = $conn->prepare($query);
 $stmt->bind_param("i", $jugador_id);
 $stmt->execute();
 $edificios_construidos = $stmt->affected_rows;
+
+// Buscar edificios que terminaron de repararse
+$query = "UPDATE edificios_jugador ej
+          JOIN edificios_catalogo ec ON ej.edificio_catalogo_id = ec.id
+          JOIN edificios_niveles en ON (ec.id = en.edificio_catalogo_id AND en.nivel = ej.nivel)
+          SET ej.esta_destruido = 0,
+              ej.vida_actual = en.vida_base,
+              ej.en_construccion = 0,
+              ej.tiempo_finalizacion = NULL
+          WHERE ej.jugador_id = ? 
+          AND ej.esta_destruido = 1
+          AND ej.en_construccion = 1
+          AND ej.tiempo_finalizacion <= NOW()";
+
+$stmt = $conn->prepare($query);
+$stmt->bind_param("i", $jugador_id);
+$stmt->execute();
+$edificios_reparados = $stmt->affected_rows;
 
 // Actualizar nivel del ayuntamiento y limite de tropas en la tabla jugadores
 $query = "UPDATE jugadores j
@@ -51,6 +71,6 @@ $stmt->execute();
 
 echo json_encode([
     'success' => true,
-    'finalizados' => $edificios_construidos + $edificios_mejorados
+    'finalizados' => $edificios_construidos + $edificios_mejorados + $edificios_reparados
 ]);
 ?>

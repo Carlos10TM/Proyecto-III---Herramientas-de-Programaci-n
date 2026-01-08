@@ -2,7 +2,7 @@
 session_start();
 require_once '../../config/connection.php';
 
-// Verificar que el usuario este logueado
+// Verificar aque el usuario este logueado
 if (!isset($_SESSION['jugador_id'])) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'No autorizado']);
@@ -19,7 +19,8 @@ if (!$edificio_id) {
 }
 
 // Obtener datos del edificio
-$query = "SELECT ej.*, ec.nombre, ec.tipo, en.costo_madera, en.costo_piedra, en.costo_comida
+$query = "SELECT ej.*, ec.nombre, en.costo_madera, en.costo_piedra, en.costo_comida, 
+          en.tiempo_construccion, en.vida_base
           FROM edificios_jugador ej
           JOIN edificios_catalogo ec ON ej.edificio_catalogo_id = ec.id
           JOIN edificios_niveles en ON (ec.id = en.edificio_catalogo_id AND en.nivel = ej.nivel)
@@ -34,15 +35,17 @@ if (!$edificio) {
     exit();
 }
 
-if (!$edificio['esta_destruido']) {
+// Verificar que el edificio este destruido
+if ($edificio['esta_destruido'] == 0) {
     echo json_encode(['success' => false, 'error' => 'El edificio no está destruido']);
     exit();
 }
 
-// Calcular costo de reparacion (50% del costo original)
-$costo_madera = floor($edificio['costo_madera'] * 0.5);
-$costo_piedra = floor($edificio['costo_piedra'] * 0.5);
-$costo_comida = floor($edificio['costo_comida'] * 0.5);
+// Calcular costos de reparación (50% del costo original)
+$costo_madera = ceil($edificio['costo_madera'] * 0.5);
+$costo_piedra = ceil($edificio['costo_piedra'] * 0.5);
+$costo_comida = ceil($edificio['costo_comida'] * 0.5);
+$tiempo_reparacion = ceil($edificio['tiempo_construccion'] * 0.25); // 25% del tiempo
 
 // Verificar recursos del jugador
 $query = "SELECT * FROM recursos_jugador WHERE jugador_id = ?";
@@ -51,26 +54,23 @@ $stmt->bind_param("i", $jugador_id);
 $stmt->execute();
 $recursos = $stmt->get_result()->fetch_assoc();
 
+// Validar recursos suficientes
 if ($recursos['madera'] < $costo_madera ||
     $recursos['piedra'] < $costo_piedra ||
     $recursos['comida'] < $costo_comida) {
     echo json_encode([
         'success' => false, 
         'error' => 'Recursos insuficientes',
-        'requerido' => [
+        'costo' => [
             'madera' => $costo_madera,
             'piedra' => $costo_piedra,
             'comida' => $costo_comida
-        ],
-        'actual' => [
-            'madera' => $recursos['madera'],
-            'piedra' => $recursos['piedra'],
-            'comida' => $recursos['comida']
         ]
     ]);
     exit();
 }
 
+// Iniciar transaccion de reparacion
 $conn->begin_transaction();
 
 try {
@@ -84,15 +84,16 @@ try {
     $stmt->bind_param("iiii", $costo_madera, $costo_piedra, $costo_comida, $jugador_id);
     $stmt->execute();
     
-    // Reparar edificio (restaurar vida completa y marcar como no destruido)
-    $query = "UPDATE edificios_jugador ej
-              JOIN edificios_catalogo ec ON ej.edificio_catalogo_id = ec.id
-              JOIN edificios_niveles en ON (ec.id = en.edificio_catalogo_id AND en.nivel = ej.nivel)
-              SET ej.esta_destruido = 0,
-                  ej.vida_actual = en.vida
-              WHERE ej.id = ? AND ej.jugador_id = ?";
+    // Calcular tiempo de finalizacion
+    $tiempo_finalizacion = date('Y-m-d H:i:s', time() + $tiempo_reparacion);
+    
+    // Marcar edificio en reparacion
+    $query = "UPDATE edificios_jugador 
+              SET en_construccion = 1,
+                  tiempo_finalizacion = ?
+              WHERE id = ? AND jugador_id = ?";
     $stmt = $conn->prepare($query);
-    $stmt->bind_param("ii", $edificio_id, $jugador_id);
+    $stmt->bind_param("sii", $tiempo_finalizacion, $edificio_id, $jugador_id);
     $stmt->execute();
     
     $conn->commit();
@@ -106,9 +107,9 @@ try {
     
     echo json_encode([
         'success' => true,
-        'message' => 'Edificio reparado exitosamente',
+        'mensaje' => 'Reparación iniciada',
         'recursos' => $recursos_actualizados,
-        'edificio' => $edificio['nombre']
+        'tiempo_reparacion' => $tiempo_reparacion
     ]);
     
 } catch (Exception $e) {
