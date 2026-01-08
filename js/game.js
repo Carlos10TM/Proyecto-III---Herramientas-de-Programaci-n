@@ -20,11 +20,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Iniciar movimiento de enemigos
     iniciarMovimientoEnemigos();
+
+    // Iniciar procesamiento de combate
+    iniciarProcesamientoCombate();
 });
 
-// ========================================
+// ======================================
 // FUNCION PARA CAMBIAR ENTRE SECCIONES
-// ========================================
+// ======================================
 function mostrarSeccion(seccion) {
     
     // Ocultar todas las secciones
@@ -1729,5 +1732,140 @@ function moverEnemigos() {
     })
     .catch(error => {
         console.error('Error al mover enemigos:', error);
+    });
+}
+
+// ============================================
+// SISTEMA DE PROCESAMIENTO DE COMBATE
+// ============================================
+
+// Iniciar el sistema de procesamiento de combate
+function iniciarProcesamientoCombate() {
+    console.log('Sistema de procesamiento de combate iniciado');
+    
+    // Procesar combate inmediatamente
+    procesarCombate();
+    
+    // Luego procesar cada 3 segundos
+    setInterval(() => {
+        procesarCombate();
+    }, 3000);
+}
+
+// Funcion que procesa un turno de combate completo
+function procesarCombate() {
+    // Solo procesar combate si hay una oleada en curso
+    if (!estadoOleada.oleadaEnCurso) {
+        return;
+    }
+    
+    fetch('api/wave/process_combat.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Procesar las acciones de combate para mostrar notificaciones
+            procesarAccionesCombate(data.acciones);
+            
+            // Si la oleada fue completada, mostrar notificacion de victoria
+            if (data.oleada_completada) {
+                mostrarVictoriaOleada(data.acciones);
+                estadoOleada.oleadaEnCurso = false;
+            }
+            
+            // Mostrar en consola cuantos enemigos siguen vivos para debug
+            if (data.enemigos_vivos > 0) {
+                console.log(`Combate: ${data.enemigos_vivos} enemigos siguen con vida`);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error al procesar combate:', error);
+    });
+}
+
+// Funcion que procesa las acciones de combate y muestra notificaciones importantes
+function procesarAccionesCombate(acciones) {
+    // Solo mostrar notificaciones para acciones importantes
+    acciones.forEach(accion => {
+        switch(accion.tipo) {
+            case 'edificio_destruido':
+                mostrarNotificacion(
+                    `💥 ¡Tu ${accion.edificio} ha sido destruido! 💥`,
+                    'error',
+                    4000
+                );
+                // Recargar edificios para actualizar el grid
+                cargarMisEdificiosParaGrid();
+                break;
+                
+            case 'enemigo_muerto':
+                // Solo registrar en consola
+                console.log(`${accion.enemigo} eliminado`);
+                break;
+        }
+    });
+}
+
+// Funcion para mostrar la notificacion de victoria cuando se completa una oleada
+function mostrarVictoriaOleada(acciones) {
+    // Buscar la accion de oleada completada para obtener detalles
+    const accionOleada = acciones.find(a => a.tipo === 'oleada_completada');
+    
+    if (!accionOleada)
+        return;
+    
+    const container = document.getElementById('notificaciones-container');
+    
+    const notificacion = document.createElement('div');
+    notificacion.className = 'alert alert-success alert-dismissible fade show mb-2';
+    notificacion.style.cssText = `
+        box-shadow: 0 8px 25px rgba(40, 167, 69, 0.6); 
+        border: 3px solid #28a745; 
+        font-size: 1.2rem;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+    `;
+    
+    notificacion.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div style="font-size: 4rem; margin-right: 15px;">🏆</div>
+            <div class="flex-grow-1">
+                <h4 class="mb-1"><strong>¡VICTORIA!</strong></h4>
+                <p class="mb-1">Has derrotado a todos los enemigos</p>
+                <div class="mt-2">
+                    <span class="badge bg-warning text-dark me-2">
+                        <i class="fas fa-coins"></i> +${accionOleada.oro_ganado} Oro
+                    </span>
+                    <span class="badge bg-light text-dark">
+                        <i class="fas fa-clock"></i> Próxima oleada en ${accionOleada.proxima_oleada_minutos} minutos
+                    </span>
+                </div>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    container.appendChild(notificacion);
+    
+    // Tiempo para desaparecer la notificacion
+    setTimeout(() => {
+        notificacion.classList.remove('show');
+        setTimeout(() => notificacion.remove(), 300);
+    }, 12000);
+    
+    // Actualizar recursos para mostrar el oro ganado
+    fetch('api/resources/generate.php', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            actualizarRecursos(data.recursos_actuales);
+        }
     });
 }

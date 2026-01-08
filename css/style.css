@@ -450,3 +450,38 @@ body {
     border-radius: 2px;
     transition: width 0.3s ease;
 }
+
+/* ========================================
+   ESTILOS PARA EDIFICIOS DESTRUIDOS
+======================================== */
+
+/* Clase para edificios que han sido destruidos */
+.edificio-destruido {
+    opacity: 0.35;
+    filter: grayscale(80%) brightness(0.7);
+    position: relative;
+}
+
+/* Overlay de destruccion para mayor efecto */
+.edificio-destruido::after {
+    content: '💥';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.2rem;
+    opacity: 0.6;
+    pointer-events: none;
+    text-shadow: 0 0 8px rgba(255, 0, 0, 0.8);
+}
+
+/* Efecto hover reducido para edificios destruidos */
+.edificio-destruido:hover {
+    transform: none;
+    cursor: not-allowed;
+}
+
+/* Transicion suave cuando un edificio pasa de intacto a destruido */
+.building-emoji {
+    transition: opacity 0.5s ease, filter 0.5s ease;
+}
