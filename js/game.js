@@ -11,6 +11,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Iniciar generacion automatica de recursos
     iniciarGeneracionAutomatica();
+
+    // Iniciar verificacion de oleadas
+    iniciarVerificacionOleadas();
+    
+    // Iniciar visualizacion de enemigos
+    iniciarVisualizacionEnemigos();
+
+    // Iniciar movimiento de enemigos
+    iniciarMovimientoEnemigos();
 });
 
 // ========================================
@@ -58,7 +67,6 @@ function cargarEdificios() {
     fetch('api/buildings/get_my_buildings.php')
         .then(response => response.json())
         .then(data => {
-            console.log('Mis edificios:', data);
             mostrarMisEdificios(data.terminados);
             mostrarEdificiosEnConstruccion(data.en_construccion);
         })
@@ -106,41 +114,41 @@ function mostrarMisEdificios(edificios) {
     let html = '';
     
     edificios.forEach(edificio => {
-        // Determinar el icono segun el tipo
-        let icono = '';
+        // Determinar el emoji segun el edificio
+        let emoji = '';
         let colorHeader = 'bg-success';
-        
+
         switch(edificio.tipo) {
-            case 'aserradero': 
-                icono = 'fa-tree'; 
-                colorHeader = 'bg-success';
+            case 'aserradero':
+                emoji = '🪵';
+                colorHeader = 'bg-success bg-gradient';
                 break;
-            case 'cantera': 
-                icono = 'fa-mountain'; 
-                colorHeader = 'bg-secondary';
+            case 'cantera':
+                emoji = '🪨';
+                colorHeader = 'bg-secondary bg-gradient';
                 break;
-            case 'granja': 
-                icono = 'fa-wheat-awn'; 
-                colorHeader = 'bg-warning';
+            case 'granja':
+                emoji = '🐄';
+                colorHeader = 'bg-danger bg-gradient';
                 break;
-            case 'mina_oro': 
-                icono = 'fa-gem'; 
-                colorHeader = 'bg-warning';
+            case 'mina_oro':
+                emoji = '⛏️';
+                colorHeader = 'bg-warning bg-gradient';
                 break;
-            case 'ayuntamiento': 
-                icono = 'fa-landmark'; 
-                colorHeader = 'bg-danger';
+            case 'ayuntamiento':
+                emoji = '🏰';
+                colorHeader = 'bg-info bg-gradient';
                 break;
-            case 'cuartel': 
-                icono = 'fa-shield-halved'; 
-                colorHeader = 'bg-primary';
+            case 'cuartel':
+                emoji = '⚔️';
+                colorHeader = 'bg-primary bg-gradient';
                 break;
-            case 'torre': 
-                icono = 'fa-tower-observation'; 
-                colorHeader = 'bg-dark';
+            case 'torre':
+                emoji = '🏯';
+                colorHeader = 'bg-dark bg-gradient';
                 break;
-            default: 
-                icono = 'fa-building';
+            default:
+                emoji = '🏗️';
         }
         
         // Crear la tarjeta HTML
@@ -149,7 +157,7 @@ function mostrarMisEdificios(edificios) {
                 <div class="card h-100">
                     <div class="card-header ${colorHeader} text-white">
                         <h6>
-                            <i class="fas ${icono}"></i> ${edificio.nombre}
+                            <span style="font-size: 1.3rem;">${emoji}</span> ${edificio.nombre}
                             <span class="badge bg-light text-dark float-end">Nv. ${edificio.nivel}</span>
                         </h6>
                     </div>
@@ -258,18 +266,8 @@ function mostrarEdificiosEnConstruccion(edificios) {
     let html = '';
     
     edificios.forEach(edificio => {
-        // Determinar el icono
-        let icono = '';
-        switch(edificio.tipo) {
-            case 'aserradero': icono = 'fa-tree'; break;
-            case 'cantera': icono = 'fa-mountain'; break;
-            case 'granja': icono = 'fa-wheat-awn'; break;
-            case 'mina_oro': icono = 'fa-gem'; break;
-            case 'ayuntamiento': icono = 'fa-landmark'; break;
-            case 'cuartel': icono = 'fa-shield-halved'; break;
-            case 'torre': icono = 'fa-tower-observation'; break;
-            default: icono = 'fa-building';
-        }
+        // Emoji segun el edificio
+        let emoji = edificioEmojis[edificio.tipo] || '🏗️';
         
         // Calcular porcentaje de progreso
         const tiempoTotal = edificio.tiempo_construccion;
@@ -281,7 +279,7 @@ function mostrarEdificiosEnConstruccion(edificios) {
                 <div class="card h-100 border-warning">
                     <div class="card-header bg-warning text-dark">
                         <h6>
-                            <i class="fas ${icono}"></i> ${edificio.nombre}
+                            <span style="font-size: 1.3rem;">${emoji}</span> ${edificio.nombre}
                             <span class="badge bg-dark float-end">
                                 <i class="fas fa-hammer"></i> Construyendo
                             </span>
@@ -344,26 +342,15 @@ function mostrarEdificiosDisponibles(edificios) {
     let html = '';
     
     edificios.forEach(edificio => {
-
-        // Determinar el icono segun el tipo
-        let icono = '';
-        switch(edificio.tipo) {
-            case 'aserradero': icono = 'fa-tree'; break;
-            case 'cantera': icono = 'fa-mountain'; break;
-            case 'granja': icono = 'fa-wheat-awn'; break;
-            case 'mina_oro': icono = 'fa-gem'; break;
-            case 'ayuntamiento': icono = 'fa-landmark'; break;
-            case 'cuartel': icono = 'fa-shield-halved'; break;
-            case 'torre': icono = 'fa-tower-observation'; break;
-            default: icono = 'fa-building';
-        }
+        // Determinar el emoji segun el edificio
+        let emoji = edificioEmojis[edificio.tipo] || '🏗️';
         
         // Crear la tarjeta HTML
         html += `
             <div class="col-md-6 col-lg-4 mb-3">
                 <div class="card">
                     <div class="card-header bg-primary text-white">
-                        <h6><i class="fas ${icono}"></i> ${edificio.nombre}</h6>
+                        <h6><span style="font-size: 1.3rem;">${emoji}</span> ${edificio.nombre}</h6>
                     </div>
                     <div class="card-body">
                         <p class="small text-muted">${edificio.descripcion}</p>
@@ -599,6 +586,15 @@ const edificioEmojis = {
     'torre': '🏯'
 };
 
+// Mapeo de tipos de enemigos a emojis
+const enemigoEmojis = {
+    'goblin': '👺',
+    'orco': '👹',
+    'troll': '🧌',
+    'esqueleto': '🩻',
+    'dragon': '🐉'
+};
+
 // Inicializar el grid
 function inicializarGrid() {
     const grid = document.getElementById('base-grid');
@@ -756,9 +752,9 @@ function mostrarInfoEdificio(edificio) {
         
         // Mostrar que unidades puede entrenar segun el nivel
         const unidadesDesbloqueadas = [];
-        if (edificio.nivel >= 1) unidadesDesbloqueadas.push('Soldado');
+        if (edificio.nivel >= 1) unidadesDesbloqueadas.push('Elfo');
         if (edificio.nivel >= 2) unidadesDesbloqueadas.push('Arquero');
-        if (edificio.nivel >= 3) unidadesDesbloqueadas.push('Caballero');
+        if (edificio.nivel >= 3) unidadesDesbloqueadas.push('Phoenix');
         if (edificio.nivel >= 4) unidadesDesbloqueadas.push('Mago');
         
         if (unidadesDesbloqueadas.length > 0) {
@@ -898,7 +894,7 @@ function mostrarNotificacion(mensaje, tipo = 'info', duracion = 4000) {
     // Agregar al contenedor
     container.appendChild(notificacion);
     
-    // desaparecer despues de la duracion
+    // Desaparecer despues de la duracion
     setTimeout(() => {
         notificacion.classList.remove('show');
         setTimeout(() => notificacion.remove(), 150);
@@ -1011,10 +1007,10 @@ function mostrarUnidades(data) {
 
     // Mapeo de tipos a iconos, emojis y colores
     const unidadConfig = {
-        'soldado': { icono: 'fa-shield', emoji: '⚔️', color: 'secondary' },
+        'elfo': { icono: 'fa-shield', emoji: '🧝🏻‍♂️', color: 'secondary' },
         'arquero': { icono: 'fa-crosshairs', emoji: '🏹', color: 'success' },
-        'caballero': { icono: 'fa-horse-head', emoji: '🐴', color: 'primary' },
-        'mago': { icono: 'fa-hat-wizard', emoji: '🧙‍♂', color: 'danger' }
+        'phoenix': { icono: 'fa-horse-head', emoji: '🐦‍🔥', color: 'danger' },
+        'mago': { icono: 'fa-hat-wizard', emoji: '🧙‍♂', color: 'primary' }
     };
     
     data.unidades.forEach(unidad => {
@@ -1177,9 +1173,9 @@ function mostrarUnidadesEnEntrenamiento() {
             
             // Mapeo de emojis
             const unidadEmojis = {
-                'soldado': '⚔️',
+                'elfo': '🧝🏻‍♂️',
                 'arquero': '🏹',
-                'caballero': '🐴',
+                'phoenix': '🐦‍🔥',
                 'mago': '🧙‍♂'
             };
             
@@ -1318,4 +1314,420 @@ function actualizarContadorTropas() {
             if (actualElement) actualElement.textContent = data.tropas_actuales;
             if (limiteElement) limiteElement.textContent = data.limite_tropas;
         });
+}
+
+// ===============================
+// SISTEMA DE OLEADAS AUTOMATICAS
+// ===============================
+
+// Variable global para rastrear el estado de las oleadas
+let estadoOleada = {
+    verificandoOleadas: false,
+    alertaMostrada: false,
+    oleadaEnCurso: false
+};
+
+// Iniciar el sistema de verificacion de oleadas cuando carga la pagina
+document.addEventListener('DOMContentLoaded', function() {
+    iniciarVerificacionOleadas();
+});
+
+// Funcion que inicia el bucle de verificacion automatica
+function iniciarVerificacionOleadas() {
+    console.log('Sistema de verificación de oleadas iniciado');
+    
+    // Verificar inmediatamente al cargar
+    verificarOleadas();
+    
+    // Luego verificar cada 10 segundos
+    setInterval(() => {
+        verificarOleadas();
+    }, 10000); // 10000 milisegundos = 10 segundos
+}
+
+// Funcion que verifica si es momento de generar una oleada
+function verificarOleadas() {
+    // Evitar multiples verificaciones a la vez
+    if (estadoOleada.verificandoOleadas) {
+        return;
+    }
+    
+    estadoOleada.verificandoOleadas = true;
+    
+    fetch('api/wave/check_wave.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Actualizar el estado global
+                estadoOleada.oleadaEnCurso = data.oleada_en_curso;
+                
+                // Si debe generar la oleada, hacerlo inmediatamente
+                if (data.debe_generar_oleada) {
+                    generarOleada();
+                }
+                // Si debe mostrar alerta y no se ha mostrado aun
+                else if (data.debe_mostrar_alerta && !estadoOleada.alertaMostrada) {
+                    mostrarAlertaPreOleada(data.oleada_actual, data.segundos_restantes);
+                    estadoOleada.alertaMostrada = true;
+                }
+                // Si hay tiempo restante, mostrar temporizador en consola para debug
+                else if (data.segundos_restantes > 60) {
+                    console.log(`Próxima oleada ${data.oleada_actual} en ${formatearTiempo(data.segundos_restantes)}`);
+                }
+            }
+            
+            estadoOleada.verificandoOleadas = false;
+        })
+        .catch(error => {
+            console.error('Error al verificar oleadas:', error);
+            estadoOleada.verificandoOleadas = false;
+        });
+}
+
+// Funcion que genera la oleada llamando al API
+function generarOleada() {
+    fetch('api/wave/generate_wave.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            console.log('Oleada generada exitosamente:', data);
+            
+            // Mostrar notificacion
+            mostrarNotificacionOleada(data);
+            
+            // Resetear la bandera de alerta para la proxima oleada
+            estadoOleada.alertaMostrada = false;
+            estadoOleada.oleadaEnCurso = true;
+            
+            // TODO: Iniciar el sistema de movimiento y combate de enemigos
+            // Esto lo implementaremos en el proximo paso
+            
+        } else {
+            console.error('Error al generar oleada:', data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error en la petición de generación de oleada:', error);
+    });
+}
+
+// Mostrar alerta de advertencia 1 minuto antes de la oleada
+function mostrarAlertaPreOleada(numeroOleada, segundosRestantes) {
+    const container = document.getElementById('notificaciones-container');
+    
+    // Crear una notificacion especial mas grande y llamativa
+    const alerta = document.createElement('div');
+    alerta.className = 'alert alert-danger alert-dismissible fade show mb-2';
+    alerta.style.cssText = 'box-shadow: 0 8px 25px rgba(220, 53, 69, 0.5); border: 3px solid #dc3545; font-size: 1.1rem;';
+    alerta.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div style="font-size: 3rem; margin-right: 15px;">⚠️</div>
+            <div class="flex-grow-1">
+                <h5 class="mb-1"><strong>¡ALERTA DE INVASIÓN!</strong></h5>
+                <p class="mb-1">Una oleada de enemigos se aproxima en <strong id="contador-alerta">${formatearTiempo(segundosRestantes)}</strong></p>
+                <small>Oleada #${numeroOleada} - Prepara tus defensas inmediatamente</small>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    container.appendChild(alerta);
+    
+    // Actualizar el contador cada segundo
+    let segundos = segundosRestantes;
+    const intervalo = setInterval(() => {
+        segundos--;
+        const elemento = document.getElementById('contador-alerta');
+        if (elemento) {
+            elemento.textContent = formatearTiempo(segundos);
+        }
+        
+        if (segundos <= 0) {
+            clearInterval(intervalo);
+            alerta.remove();
+        }
+    }, 1000);
+
+    // Tambien emitir un sonido de alerta (se puede agregar un archivo de sonido mas adelante)
+}
+
+// Mostrar notificacion cuando comienza la oleada
+function mostrarNotificacionOleada(data) {
+    const container = document.getElementById('notificaciones-container');
+    
+    const notificacion = document.createElement('div');
+    notificacion.className = 'alert alert-warning alert-dismissible fade show mb-2';
+    notificacion.style.cssText = 'box-shadow: 0 8px 25px rgba(255, 193, 7, 0.5); border: 3px solid #ffc107; font-size: 1.2rem; background: linear-gradient(135deg, #ffc107 0%, #ff6f00 100%); color: white;';
+    notificacion.innerHTML = `
+        <div class="d-flex align-items-center">
+            <div style="font-size: 3.5rem; margin-right: 15px;">⚔️</div>
+            <div class="flex-grow-1">
+                <h4 class="mb-1"><strong>¡OLEADA ${data.numero_oleada} INICIADA!</strong></h4>
+                <p class="mb-1">${data.enemigos_generados} enemigos están atacando tu reino</p>
+                <small>¡Defiende tu base a toda costa!</small>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+        </div>
+    `;
+    
+    container.appendChild(notificacion);
+    
+    // Hacer que la notificacion desaparezca despues de 8 segundos
+    setTimeout(() => {
+        notificacion.classList.remove('show');
+        setTimeout(() => notificacion.remove(), 300);
+    }, 8000);
+}
+
+// =====================================
+// SISTEMA DE VISUALIZACIÓN DE ENEMIGOS
+// =====================================
+
+// Variable global para almacenar enemigos actuales
+let enemigosActivos = [];
+
+// Iniciar el sistema de visualizacion de enemigos
+function iniciarVisualizacionEnemigos() {
+    console.log('Sistema de visualización de enemigos iniciado');
+    
+    // Actualizar enemigos altiro al iniciar
+    actualizarEnemigos();
+    
+    // Luego actualizar cada 2 segundos
+    setInterval(() => {
+        actualizarEnemigos();
+    }, 2000);
+}
+
+// Funcion que obtiene y muestra los enemigos actuales
+function actualizarEnemigos() {
+    fetch('api/wave/get_active_enemies.php')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                enemigosActivos = data.enemigos;
+                
+                // Si hay enemigos, dibujarlos en el grid
+                if (enemigosActivos.length > 0) {
+                    dibujarEnemigosEnGrid(enemigosActivos);
+                } else {
+                    // Si no hay enemigos, limpiar cualquier enemigo que este dibujado
+                    limpiarEnemigosDelGrid();
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error al actualizar enemigos:', error);
+        });
+}
+
+// Funcion que dibuja los enemigos en el grid
+function dibujarEnemigosEnGrid(enemigos) {
+    // Limpiar todos los enemigos dibujados previamente
+    limpiarEnemigosDelGrid();
+    
+    // Dibujar cada enemigo en su posicion
+    enemigos.forEach(enemigo => {
+        // Solo dibujar enemigos que ya entraron al grid (posicion >= 0)
+        if (enemigo.posicion >= 0 && enemigo.posicion <= 80) {
+            const cell = document.querySelector(`[data-position="${enemigo.posicion}"]`);
+            
+            if (cell) {
+                // Determinar si es una variante mejorada
+                const esVarianteMejorada = enemigo.nombre.includes('Guerrero') || 
+                                        enemigo.nombre.includes('Berserker') || 
+                                        enemigo.nombre.includes('Gigante') ||
+                                        enemigo.nombre.includes('Ancestral');
+
+                // Obtener el emoji del tipo de enemigo
+                const emoji = enemigoEmojis[enemigo.tipo] || '👾';
+
+                // Crear el contenedor principal del enemigo
+                const enemigoDiv = document.createElement('div');
+                enemigoDiv.className = 'enemigo-container';
+                enemigoDiv.dataset.enemigoId = enemigo.id;
+
+                // Crear el contenedor del emoji (para la estrella)
+                const enemigoEmojiContainer = document.createElement('div');
+                enemigoEmojiContainer.className = 'enemigo-emoji-container';
+
+                // Crear el emoji del enemigo
+                const enemigoEmoji = document.createElement('div');
+                enemigoEmoji.className = esVarianteMejorada ? 'enemigo-emoji mejorado' : 'enemigo-emoji basico';
+                enemigoEmoji.textContent = emoji;
+
+                // Agregar event listener para mostrar informacion del enemigo al hacer click
+                enemigoEmoji.addEventListener('click', function(event) {
+                    // Prevenir que el click se haga a elementos debajo
+                    event.stopPropagation();
+                    
+                    // Mostrar la informacion detallada del enemigo
+                    mostrarInfoEnemigo(enemigo, emoji, esVarianteMejorada);
+                });
+
+                enemigoEmojiContainer.appendChild(enemigoEmoji);
+
+                // Si es variante mejorada, agregar estrella dorada
+                if (esVarianteMejorada) {
+                    const estrella = document.createElement('div');
+                    estrella.className = 'enemigo-estrella';
+                    estrella.textContent = '⭐';
+                    enemigoEmojiContainer.appendChild(estrella);
+                }
+
+                // Crear la barra de vida
+                const vidaContainer = document.createElement('div');
+                vidaContainer.className = 'enemigo-vida-container';
+
+                const vidaBarra = document.createElement('div');
+                vidaBarra.className = 'enemigo-vida-barra';
+                const porcentajeVida = (enemigo.vida_actual / enemigo.vida_maxima) * 100;
+                vidaBarra.style.width = porcentajeVida + '%';
+
+                vidaContainer.appendChild(vidaBarra);
+                enemigoDiv.appendChild(enemigoEmojiContainer);
+                enemigoDiv.appendChild(vidaContainer);
+                
+                // Hacer la celda relativa para posicionamiento absoluto
+                cell.style.position = 'relative';
+                cell.appendChild(enemigoDiv);
+            }
+        }
+    });
+}
+
+// Funcion para limpiar todos los enemigos del grid
+function limpiarEnemigosDelGrid() {
+    const enemigosEnGrid = document.querySelectorAll('.enemigo-container');
+    enemigosEnGrid.forEach(enemigo => enemigo.remove());
+}
+
+// Funcion para mostrar informacion detallada de un enemigo al hacer click
+function mostrarInfoEnemigo(enemigo, emoji, esVarianteMejorada) {
+    const container = document.getElementById('notificaciones-container');
+    
+    // Crear una notificacion especial para informacion del enemigo
+    const notificacion = document.createElement('div');
+    notificacion.className = 'alert alert-dark alert-dismissible fade show mb-2';
+    notificacion.style.cssText = `
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.6); 
+        border: 3px solid #6c757d; 
+        font-size: 1rem;
+        max-width: 400px;
+    `;
+    
+    // Determinar el color de la barra de vida para visualizacion
+    const porcentajeVida = (enemigo.vida_actual / enemigo.vida_maxima) * 100;
+    let colorVida = 'success';
+    if (porcentajeVida < 30) colorVida = 'danger';
+    else if (porcentajeVida < 70) colorVida = 'warning';
+    
+    notificacion.innerHTML = `
+        <div class="d-flex align-items-start">
+            <div class="me-3 text-center">
+                <div style="position: relative; display: inline-block; font-size: 4rem; line-height: 1;">
+                    ${emoji}
+                    ${esVarianteMejorada ? '<div style="position: absolute; top: -8px; right: -8px; font-size: 1.2rem; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8));">⭐</div>' : ''}
+                </div>
+            </div>
+            <div class="flex-grow-1">
+                <button type="button" class="btn-close" data-bs-dismiss="alert" style="position: absolute; top: 10px; right: 10px;"></button>
+                
+                <h5 class="mb-2">
+                    <strong>${enemigo.nombre}</strong>
+                    ${esVarianteMejorada ? '<span class="badge bg-warning text-dark ms-2">Elite</span>' : ''}
+                </h5>
+                
+                <p class="mb-2 small text-muted">${enemigo.descripcion || 'Criatura hostil'}</p>
+                
+                <div class="mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <small><strong>❤️ Vida:</strong></small>
+                        <small><strong>${enemigo.vida_actual} / ${enemigo.vida_maxima}</strong></small>
+                    </div>
+                    <div class="progress" style="height: 15px;">
+                        <div class="progress-bar bg-${colorVida}" 
+                             style="width: ${porcentajeVida}%">
+                            ${Math.round(porcentajeVida)}%
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row text-center mt-3">
+                    <div class="col-6">
+                        <div class="bg-danger bg-opacity-10 p-2 rounded">
+                            <div style="font-size: 1.5rem;">⚔️</div>
+                            <small class="text-muted d-block">Ataque</small>
+                            <strong class="text-danger">${enemigo.ataque}</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="bg-info bg-opacity-10 p-2 rounded">
+                            <div style="font-size: 1.5rem;">🌊</div>
+                            <small class="text-muted d-block">Oleada</small>
+                            <strong class="text-info">#${enemigo.oleada_numero}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(notificacion);
+    
+    // Hacer que la notificacion desaparezca despues de 10 segundos
+    setTimeout(() => {
+        notificacion.classList.remove('show');
+        setTimeout(() => notificacion.remove(), 300);
+    }, 10000);
+}
+
+// ===================================
+// SISTEMA DE MOVIMIENTO DE ENEMIGOS
+// ===================================
+
+// Variable para rastrear si el sistema de movimiento esta activo
+let sistemaMovimientoActivo = false;
+
+// Iniciar el sistema de movimiento de enemigos
+function iniciarMovimientoEnemigos() {
+    console.log('Sistema de movimiento de enemigos iniciado');
+    
+    // Mover inmediatamente
+    moverEnemigos();
+    
+    // Luego mover cada 2 segundos
+    setInterval(() => {
+        moverEnemigos();
+    }, 2000);
+}
+
+// Funcion que llama al API para mover todos los enemigos
+function moverEnemigos() {
+    // Solo mover si hay una oleada en curso
+    if (!estadoOleada.oleadaEnCurso) {
+        return;
+    }
+    
+    fetch('api/wave/move_enemies.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // El sistema de visualizacion automaticamente detectara los cambios de posicion en la proxima actualizacion
+            console.log(`Movimiento: ${data.enemigos_movidos} enemigos se movieron`);
+        }
+    })
+    .catch(error => {
+        console.error('Error al mover enemigos:', error);
+    });
 }

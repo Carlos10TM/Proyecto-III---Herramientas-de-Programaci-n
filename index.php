@@ -75,22 +75,22 @@ $jugador = $result->fetch_assoc();
                     <div class="card-body">
                         <div class="row text-center">
                             <div class="col-md-3 col-6 mb-2">
-                                <i class="fas fa-coins fa-2x text-warning"></i>
+                                <div style="font-size: 2.5rem;">🪙</div>
                                 <h5 class="mt-2">Oro</h5>
                                 <h4 id="oro"><?php echo number_format($jugador['oro']); ?></h4>
                             </div>
                             <div class="col-md-3 col-6 mb-2">
-                                <i class="fas fa-tree fa-2x text-success"></i>
+                                <div style="font-size: 2.5rem;">🪵</div>
                                 <h5 class="mt-2">Madera</h5>
                                 <h4 id="madera"><?php echo number_format($jugador['madera']); ?></h4>
                             </div>
                             <div class="col-md-3 col-6 mb-2">
-                                <i class="fas fa-mountain fa-2x text-secondary"></i>
+                                <div style="font-size: 2.5rem;">🪨</div>
                                 <h5 class="mt-2">Piedra</h5>
                                 <h4 id="piedra"><?php echo number_format($jugador['piedra']); ?></h4>
                             </div>
                             <div class="col-md-3 col-6 mb-2">
-                                <i class="fas fa-bread-slice fa-2x text-danger"></i>
+                                <div style="font-size: 2.5rem;">🍖</div>
                                 <h5 class="mt-2">Comida</h5>
                                 <h4 id="comida"><?php echo number_format($jugador['comida']); ?></h4>
                             </div>

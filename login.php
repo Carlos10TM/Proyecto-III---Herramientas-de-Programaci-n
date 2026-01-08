@@ -73,6 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             $stmt = $conn->prepare($query);
             $stmt->bind_param("i", $jugador_id);
             $stmt->execute();
+
+            // Crear el cuartel inicial (edificio_catalogo_id = 6, nivel 1)
+            $query = "INSERT INTO edificios_jugador (jugador_id, edificio_catalogo_id, nivel, en_construccion, en_mejora) 
+                    VALUES (?, 6, 1, 0, 0)";
+            $stmt = $conn->prepare($query);
+            $stmt->bind_param("i", $jugador_id);
+            $stmt->execute();
             
             $_SESSION['jugador_id'] = $jugador_id;
             $_SESSION['username'] = $username;
