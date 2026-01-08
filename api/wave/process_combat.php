@@ -29,8 +29,8 @@ if (!$estado || !$estado['oleada_en_curso']) {
 
 function sonAdyacentes($pos1, $pos2) {
     $distancia = calcularDistancia($pos1, $pos2);
-    // Considerar adyacentes si estan en la misma posición O a distancia 1
-    return $distancia === 0 || $distancia === 1;
+    // Atacar si la distancia es 1 o menos (misma casilla o adyacente)
+    return $distancia <= 1;
 }
 
 function calcularDistancia($pos1, $pos2) {
